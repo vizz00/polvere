@@ -236,6 +236,21 @@ const WINDOW_HELP = `<div class="win-help">
     <tr><td>di 2-3 giorni fa: si stanno stabilizzando</td><td>${sg('avvisi')}</td></tr>
     <tr><td>previsti da pochi modelli, o su versanti non tuoi</td><td>${sg('aperta')} solo sulla rosa</td></tr>
   </tbody></table>
+  <h3>Gli altri segnali</h3>
+  <p><b>Pioggia</b> ${sg('chiusa')}: almeno 2 mm di pioggia alla quota del posto. L'acqua entra nel manto, lo appesantisce e scioglie i legami tra i cristalli: la neve bagnata si stacca facilmente, su tutti i versanti, e la pioggia sulla neve fresca è il caso peggiore.</p>
+  <p><b>Niente rigelo</b> ${sg('chiusa')}: la notte resta sopra 2 °C, oppure sopra 0 °C con cielo coperto (le nuvole trattengono il calore). Se la neve non gela di notte non si forma la crosta portante del mattino: è molle e instabile già dalle prime ore. Con una notte serena e fredda, invece, al mattino il manto è solido.</p>
+  <p><b>Primo sole dopo la nevicata</b> ${sg('avvisi')}: almeno 10 cm nei 2 giorni prima e oggi cielo sereno con massima sopra 0 °C. Il primo riscaldamento forte, prima che la neve nuova si sia assestata, fa partire molte valanghe spontanee (SLF): meglio uscire presto e scendere prima che il sole scaldi i versanti a sud, est e ovest.</p>
+  <p><b>Bollettino valanghe</b>: grado 4 o 5 ${sg('chiusa')}, grado 3 ${sg('avvisi')}. Diamo ${sg('avvisi')} anche quando segnala strati deboli persistenti (strati fragili sepolti, difficili da vedere e capaci di staccarsi da lontano) o neve bagnata alla quota del posto. Se segnala neve ventata, i versanti degli accumuli sono i suoi. Il bollettino c'è per oggi e domani: per gli altri giorni il giudizio viene solo da meteo e neve (${sg('aperta')} mezzo pieno).</p>
+  <h3>Il meteo</h3>
+  <p>Senza segnali di pericolo il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono tutte e tre:</p>
+  <ul>
+    <li><b>sole</b>: nuvole sotto il 40% di giorno, per vedere il terreno e i segni di pericolo;</li>
+    <li><b>vento debole</b>: vento in quota sotto 30 km/h, per stare bene in cresta e non spostare neve;</li>
+    <li><b>zero termico sotto la quota</b>: la neve resta fredda e asciutta.</li>
+  </ul>
+  <p>La neve recente (almeno 5 cm in 3 giorni) non cambia il segno: è un'informazione in più.</p>
+  <h3>Come mettiamo d'accordo i modelli</h3>
+  <p>Ogni regola viene controllata su ogni modello meteo. Se la vede almeno metà dei modelli il segnale è sicuro; se la vede almeno un quarto è "possibile". Un pericolo solo possibile dà ${sg('avvisi')} invece di ${sg('chiusa')}.</p>
   <p class="muted">Fonti: SLF ("Achtung Lawinen!"), EAWS (problemi valanghivi). Il peso della neve di 2 giorni fa è una nostra semplificazione.</p>
 </div>`;
 
