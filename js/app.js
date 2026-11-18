@@ -33,7 +33,7 @@ const state = {
   loading: false,
   aval: null, // bollettini valanghe di oggi/domani
   avalArchive: null, // { day, data } quando si guarda un giorno passato
-  info: { chart: false, powder: false }, // spiegazioni aperte con il tasto ⓘ
+  info: { chart: false, powder: false, window: false }, // spiegazioni aperte con il tasto ⓘ
   menu: false, // menù ⋯ della pagina del posto
   reorder: false, // riordino manuale dei preferiti aperto
 };
@@ -214,6 +214,31 @@ document.addEventListener(
   true,
 );
 
+// Spiegazione della Finestra buona (tasto ⓘ): neve fresca e accumuli, con il perché delle regole.
+const sg = (st) => `<span class="win legend win-${st}" aria-hidden="true"></span>`;
+const WINDOW_HELP = `<div class="win-help">
+  <p>Ogni giorno, alla quota del posto, guardiamo due segnali di pericolo valanghe: neve fresca e accumuli. Ognuno dà un segno: ${sg('aperta')} nessun segnale, ${sg('avvisi')} attenzione, ${sg('chiusa')} pericolo. Il giorno prende il segno più grave; senza segnali conta il meteo (${sg('meteo')} meteo non buono). Il bollettino valanghe, quando c'è, ha l'ultima parola. Le regole valgono per pendii ripidi, sopra 30°: su pendii poco ripidi il pericolo è più basso.</p>
+  <h3>Neve fresca</h3>
+  <p>La neve appena caduta non è ancora legata al manto sottostante: il pericolo è massimo durante e subito dopo la nevicata, poi la neve si assesta e si lega. Per questo sommiamo la neve di oggi e di ieri per intero e quella di 2 giorni fa per metà.</p>
+  <p>Quanta neve è troppa dipende da come è caduta (SLF). Con vento forte (40 km/h o più) la neve arriva pressata in lastre su un fondo che non la tiene. Con gran freddo (sotto −7 °C) i primi centimetri restano leggeri e si legano male, e il freddo rallenta l'assestamento. Con vento debole e temperature vicine a 0 °C la neve si lega in fretta. Conta solo il vento dei giorni in cui nevicava.</p>
+  <table class="win-tab"><thead><tr><th>Come è caduta</th><th>${sg('aperta')}</th><th>${sg('avvisi')}</th><th>${sg('chiusa')}</th></tr></thead><tbody>
+    <tr><td>vento forte o gran freddo</td><td>&lt; 10 cm</td><td>10–20</td><td>&gt; 20</td></tr>
+    <tr><td>vento medio (20–40 km/h)</td><td>&lt; 20 cm</td><td>20–30</td><td>&gt; 30</td></tr>
+    <tr><td>vento debole</td><td>&lt; 30 cm</td><td>30–50</td><td>&gt; 50</td></tr>
+  </tbody></table>
+  <p>Fondo debole: se prima della nevicata ci sono stati 5 o più giorni secchi, la superficie vecchia è spesso incoerente e la neve nuova si lega male. Da 10 cm diamo ${sg('avvisi')}.</p>
+  <h3>Accumuli</h3>
+  <p>Il vento solleva la neve soffice dai versanti esposti e la deposita su quelli riparati, dietro creste, nei canali e nelle conche. Gli accumuli sembrano neve bella ma possono staccarsi al passaggio di uno sciatore.</p>
+  <p>Il vento sposta solo neve soffice, anche caduta giorni prima se è rimasta fredda: contiamo la neve degli ultimi 7 giorni e la azzeriamo quando diventa dura (pioggia, una notte senza gelo, una massima di +3 °C o più). Servono almeno 10 cm di neve soffice e vento in quota di almeno 30 km/h, durante o dopo la nevicata: il vento che soffia prima non forma accumuli. Si caricano i versanti opposti al vento e i due accanto (vento da nord-ovest: sud-est, est e sud), colorati sulla rosa.</p>
+  <table class="win-tab"><thead><tr><th>Accumuli</th><th>Segno</th></tr></thead><tbody>
+    <tr><td>freschi (vento oggi o ieri) sui tuoi versanti</td><td>${sg('chiusa')}</td></tr>
+    <tr><td>freschi, senza versanti scelti</td><td>${sg('avvisi')}</td></tr>
+    <tr><td>di 2-3 giorni fa: si stanno stabilizzando</td><td>${sg('avvisi')}</td></tr>
+    <tr><td>previsti da pochi modelli, o su versanti non tuoi</td><td>${sg('aperta')} solo sulla rosa</td></tr>
+  </tbody></table>
+  <p class="muted">Fonti: SLF ("Achtung Lawinen!"), EAWS (problemi valanghivi). Il peso della neve di 2 giorni fa è una nostra semplificazione.</p>
+</div>`;
+
 function windowSection(place, band, selDay = null) {
   const s = state.forecast?.byPlace[place.id]?.[band];
   if (!s) return '';
@@ -262,6 +287,8 @@ function windowSection(place, band, selDay = null) {
   return `<details class="windows" data-windows ${open ? 'open' : ''}>
     <summary><h2>Finestra buona <span class="muted small">a ${place.elevations[band]} m · regole SLF ed EAWS</span></h2>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+    <p class="pw-legend win-how"><span class="pw-k">Come funziona</span>${infoBtn('window')}</p>
+    ${state.info.window ? WINDOW_HELP : ''}
     <ol class="win-list">${items}</ol>
     <div class="aspect-pick"><span class="muted small">I tuoi versanti</span><div class="aspects">${picker}</div></div>
   </details>`;
