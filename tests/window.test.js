@@ -7,7 +7,7 @@ import { summarizePoint } from '../js/snow.js';
 // Giorno sintetico con gli stessi valori per 3 modelli.
 const BASE = {
   snow: 0, precip: 0, rain: 0, windMax: 10, windDir: 0, transportDir: null, transportHours: 0,
-  cloud: 10, nightCloud: 10, tMin: -8, tMax: -2, tNightMin: -8, freezingMax: 1800,
+  cloud: 10, nightCloud: 10, tMin: -8, tMax: -2, tNightMin: -8, tSnow: -3, freezingMax: 1800,
 };
 function day(date, over = {}) {
   const m = { ...BASE, ...over };
@@ -44,29 +44,90 @@ test('due giorni di neve con vento forte: chiusa (esempio di Riccardo)', () => {
   assert.deepEqual(w.loaded, ['E', 'SE', 'S']);
 });
 
-test('poca neve con vento: avviso sui versanti sottovento, chiusa se è il mio versante', () => {
+test('accumuli freschi: avviso sui versanti sottovento, chiusa se è il mio versante', () => {
   const days = [
-    day('2026-01-01', { snow: 6, windMax: 30, transportDir: 0, transportHours: 6, tMin: -3 }),
-    day('2026-01-02', { windMax: 15, tMin: -3 }),
-    day('2026-01-03', { windMax: 15, tMin: -3 }),
+    day('2026-01-01', { snow: 12, windMax: 15 }),
+    day('2026-01-02', { windMax: 15 }),
+    day('2026-01-03', { windMax: 15 }),
+    day('2026-01-04', { windMax: 35, transportDir: 0, transportHours: 6 }),
   ];
-  // condizioni "medie" (vento 30) → soglia 20 cm: 6 cm non bastano per la neve critica
-  const any = evaluateDay(days, 2, ELEV);
+  const any = evaluateDay(days, 3, ELEV);
   assert.equal(any.status, 'avvisi');
   assert.deepEqual(any.loaded, ['SE', 'S', 'SO']);
-  const mine = evaluateDay(days, 2, ELEV, { aspects: ['S'] });
-  assert.equal(mine.status, 'chiusa');
-  const north = evaluateDay(days, 2, ELEV, { aspects: ['N'] });
-  assert.equal(north.status, 'aperta');
+  assert.equal(evaluateDay(days, 3, ELEV, { aspects: ['S'] }).status, 'chiusa');
+  // versante non tuo: nessun avviso (resta solo il vento forte per il meteo)
+  assert.equal(evaluateDay(days, 3, ELEV, { aspects: ['N'] }).status, 'meteo');
 });
 
-test('neve fresca critica: la soglia dipende dalle condizioni (SLF)', () => {
-  const calm = [day('d1', { snow: 25, tMin: -3, windMax: 10, cloud: 90 }), day('d2', { tMin: -3 }), day('d3', { tMin: -3 })];
-  // favorevoli → soglia 30: 25 cm non è critica
-  assert.ok(!evaluateDay(calm, 2, ELEV).signals.some((s) => s.id === 'critical'));
-  const cold = [day('d1', { snow: 12, tMin: -12, tSnow: -12, cloud: 90 }), day('d2'), day('d3')];
-  // sfavorevoli (freddo) → soglia 10
-  assert.ok(evaluateDay(cold, 2, ELEV).signals.some((s) => s.id === 'critical'));
+test('accumuli di 2-3 giorni fa: solo avviso anche sul mio versante', () => {
+  const days = [
+    day('d1', { snow: 12, windMax: 35, transportDir: 0, transportHours: 6 }),
+    day('d2'), day('d3'), day('d4'),
+  ];
+  const w = evaluateDay(days, 3, ELEV, { aspects: ['S'] });
+  assert.equal(w.status, 'avvisi');
+  assert.equal(w.signals.find((s) => s.id === 'windSlab').level, 'avviso');
+});
+
+test('accumuli: poca neve, vento debole o vento solo prima della neve non contano', () => {
+  const little = [day('d1', { snow: 6 }), day('d2', { windMax: 35, transportDir: 0 })];
+  assert.equal(evaluateDay(little, 1, ELEV).signals.length, 0);
+  const weak = [day('d1', { snow: 15 }), day('d2', { windMax: 25, transportDir: 0 })];
+  assert.ok(!evaluateDay(weak, 1, ELEV).signals.some((s) => s.id === 'windSlab'));
+  const before = [day('d1', { windMax: 40, transportDir: 0 }), day('d2', { snow: 15 }), day('d3')];
+  assert.ok(!evaluateDay(before, 2, ELEV).signals.some((s) => s.id === 'windSlab'));
+});
+
+test('accumuli: neve vecchia ma soffice si sposta; pioggia o caldo la induriscono', () => {
+  const soft = [day('d1', { snow: 20 }), day('d2'), day('d3'), day('d4'), day('d5'), day('d6', { windMax: 35, transportDir: 315 })];
+  assert.ok(evaluateDay(soft, 5, ELEV).signals.some((s) => s.id === 'windSlab'));
+  const rain = soft.map((d) => structuredClone(d));
+  for (const m of Object.values(rain[2].models)) m.rain = 5;
+  assert.ok(!evaluateDay(rain, 5, ELEV).signals.some((s) => s.id === 'windSlab'));
+  const warm = soft.map((d) => structuredClone(d));
+  for (const m of Object.values(warm[3].models)) m.tMax = 4;
+  assert.ok(!evaluateDay(warm, 5, ELEV).signals.some((s) => s.id === 'windSlab'));
+  const mild = soft.map((d) => structuredClone(d));
+  for (const m of Object.values(mild[3].models)) m.tMax = 1; // poco sopra zero: a nord resta polvere
+  assert.ok(evaluateDay(mild, 5, ELEV).signals.some((s) => s.id === 'windSlab'));
+});
+
+test('accumuli solo "possibili": versanti sulla rosa ma il segno non cambia', () => {
+  const days = [day('d1', { snow: 15 }), day('d2')];
+  days[1].models.a.windMax = 35;
+  days[1].models.a.transportDir = 0;
+  const w = evaluateDay(days, 1, ELEV);
+  assert.equal(w.status, 'aperta');
+  assert.equal(w.signals.find((s) => s.id === 'windSlab').level, 'info');
+  assert.deepEqual(w.loaded, ['SE', 'S', 'SO']);
+});
+
+test('neve fresca: soglie SLF a intervallo, giallo dentro e rosso oltre', () => {
+  // vento debole → 30-50 cm
+  const calm = (cmToday) => [day('d1'), day('d2', { snow: 0 }), day('d3', { snow: cmToday, cloud: 90 })];
+  assert.ok(!evaluateDay(calm(25), 2, ELEV).signals.some((s) => s.id === 'critical'));
+  assert.equal(evaluateDay(calm(35), 2, ELEV).signals.find((s) => s.id === 'critical').level, 'avviso');
+  assert.equal(evaluateDay(calm(55), 2, ELEV).signals.find((s) => s.id === 'critical').level, 'chiusa');
+  // freddo mentre nevica → 10-20 cm
+  const cold = [day('d1'), day('d2'), day('d3', { snow: 12, tSnow: -12, cloud: 90 })];
+  assert.equal(evaluateDay(cold, 2, ELEV).signals.find((s) => s.id === 'critical').level, 'avviso');
+});
+
+test('neve fresca: 2 giorni fa conta metà, il vento senza neve non cambia le condizioni', () => {
+  // 40 cm due giorni fa (vale 20), poi vento forte senza neve: condizioni favorevoli, nessun segnale
+  const days = [day('d1', { snow: 40 }), day('d2', { windMax: 50 }), day('d3')];
+  assert.ok(!evaluateDay(days, 2, ELEV).signals.some((s) => s.id === 'critical'));
+});
+
+test('fondo debole: dopo 5 giorni secchi bastano 10 cm, ma solo giallo', () => {
+  const dry = Array.from({ length: 6 }, (_, i) => day(`d${i}`));
+  const days = [...dry, day('d6', { snow: 15, cloud: 90 })];
+  const w = evaluateDay(days, 6, ELEV);
+  const s = w.signals.find((x) => x.id === 'weakBase');
+  assert.equal(s.level, 'avviso');
+  assert.equal(w.status, 'avvisi');
+  // senza giorni secchi prima: nessun segnale con 15 cm e vento debole
+  assert.equal(evaluateDay([day('a', { snow: 3 }), day('b', { snow: 15, cloud: 90 })], 1, ELEV).signals.length, 0);
 });
 
 test('pioggia e notte senza rigelo chiudono la finestra', () => {

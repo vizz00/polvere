@@ -16,8 +16,8 @@ const MAX_AGE_MS = 60 * 60 * 1000; // un'ora
 export const FORECAST_DAYS = 10; // panoramica: prossimi 1-5 e 6-10 giorni
 export const DETAIL_DAYS = 16; // dettaglio del posto: grafici a 15 giorni
 // Giorni passati scaricati insieme alla previsione: servono alle regole della finestra buona
-// (neve e vento degli ultimi 3 giorni).
-export const PAST_DAYS = 3;
+// (neve fresca degli ultimi 3 giorni, giorni secchi prima della nevicata, neve soffice degli ultimi 7).
+export const PAST_DAYS = 8;
 
 function buildPoints(places) {
   const points = [];

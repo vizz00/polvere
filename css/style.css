@@ -689,3 +689,14 @@ h1, h2, h3, .page-title, .summary-main, .total-num, .place-head .ss-cell b, .dl 
 .place-head .star, .place-head .x-btn, .fc-days .fc-day { position: relative; z-index: 2; }
 .place:has(.place-title:active) { background: var(--bg-2); }
 .place-title:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); }
+
+/* Finestra buona: spiegazione dietro il tasto ⓘ */
+.win-how { margin: 0 0 8px; }
+.win-help { margin: 0 2px 12px; font-size: 13px; line-height: 1.45; color: var(--muted); max-width: 70ch; }
+.win-help p { margin: 0 0 8px; }
+.win-help h3 { margin: 12px 0 4px; font-size: 13px; color: var(--text); }
+.win-help .win.legend { margin: 0 1px; }
+.win-tab { border-collapse: collapse; margin: 2px 0 10px; font-size: 12px; }
+.win-tab th, .win-tab td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; font-variant-numeric: tabular-nums; }
+.win-tab th { color: var(--text); font-weight: 600; }
+.win-tab td + td, .win-tab th + th { white-space: nowrap; }

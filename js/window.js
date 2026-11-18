@@ -4,22 +4,28 @@
 // Calcoli puri (nessun DOM, nessuna rete), provati con `node --test`.
 // Le regole e le soglie vengono da:
 // - SLF, "Achtung Lawinen!" (2022): neve fresca critica in 3 giorni, vento forte > 40 km/h,
-//   lastroni da vento critici per 1-3 giorni, pioggia, riscaldamento, rigelo.
+//   accumuli di neve ventata (più pericolosi durante e subito dopo il vento), pioggia, riscaldamento, rigelo.
 // - EAWS, problemi valanghivi tipici; avalanche.report, i 10 Gefahrenmuster (gm.3, gm.6, gm.10).
 // L'app non dà un voto: dice quali condizioni sono rispettate e quali segnali sono scattati.
 // Il bollettino ufficiale, quando c'è, ha sempre l'ultima parola.
 
-import { TRANSPORT_WIND_KMH } from './snow.js';
-
 export const RULES = {
-  lookbackDays: 3, // neve fresca sommata su 3 giorni (oggi compreso)
-  // Neve fresca critica SLF (cm): limite basso di ogni intervallo, per prudenza.
-  critical: { sfavorevoli: 10, medie: 20, favorevoli: 30 },
-  strongWind: 40, // km/h: "vento forte" SLF, condizioni sfavorevoli
-  moderateWind: 20, // km/h: sotto questo il vento è debole (condizioni favorevoli)
+  // Neve fresca: peso dei giorni (oggi, ieri, 2 giorni fa). Il peso è una scelta nostra:
+  // la neve nuova è più pericolosa durante e subito dopo la nevicata, poi si assesta (EAWS).
+  snowWeights: [1, 1, 0.5],
+  // Neve fresca critica SLF in 1-3 giorni (cm): intervallo [basso, alto].
+  // Sotto il basso nessun segnale, dentro l'intervallo ▲, oltre l'alto ✕.
+  critical: { sfavorevoli: [10, 20], medie: [20, 30], favorevoli: [30, 50] },
+  strongWind: 40, // km/h mentre nevica: "vento forte" SLF, condizioni sfavorevoli
+  moderateWind: 20, // km/h mentre nevica: sotto questo il vento è debole (condizioni favorevoli)
   coldUnfavorable: -7, // °C mentre nevica: freddo che rende sfavorevole la nevicata (SLF: −5/−10)
-  transportWind: TRANSPORT_WIND_KMH, // km/h: vento che sposta la neve soffice
-  softSnow: 5, // cm in 3 giorni: c'è neve soffice da spostare
+  snowDay: 1, // cm: un giorno con meno neve conta come secco
+  dryBefore: 5, // giorni secchi prima della nevicata: fondo debole (SLF), al massimo ▲
+  // Accumuli: neve soffice degli ultimi 7 giorni che il vento può spostare.
+  softDays: 7,
+  softSnow: 10, // cm di neve soffice perché il vento formi accumuli
+  transportWind: 30, // km/h di vento in quota che sposta la neve in quantità
+  warmDay: 3, // °C di massima che fanno crosta e azzerano la neve soffice
   rainMm: 2, // mm di pioggia alla quota in un giorno
   warmingSnow: 10, // cm caduti nei 2 giorni prima del primo sole
   sunnyCloud: 40, // % nuvolosità diurna sotto cui il giorno è "sereno"
@@ -74,45 +80,78 @@ const median = (xs) => {
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 };
 
+// Notte senza rigelo: minima sopra 2 °C, o sopra 0 °C con notte coperta.
+const noRefreeze = (m) => m.tNightMin != null && (m.tNightMin > 2 || (m.tNightMin > 0 && (m.nightCloud ?? 0) >= 60));
+// Giorno che rende la neve dura (non più trasportabile): pioggia, caldo, niente rigelo.
+const hardens = (m) => (m.rain ?? 0) >= RULES.rainMm || (m.tMax ?? -99) >= RULES.warmDay || noRefreeze(m);
+
+/** Neve soffice disponibile alla fine del giorno `k`: neve degli ultimi 7 giorni dopo l'ultimo giorno che l'ha indurita. */
+function softSnowAt(days, k, id) {
+  let soft = 0;
+  for (let j = Math.max(0, k - RULES.softDays + 1); j <= k; j++) {
+    const m = days[j]?.models[id];
+    if (!m) continue;
+    if (hardens(m)) soft = 0;
+    if ((m.rain ?? 0) < RULES.rainMm) soft += m.snow ?? 0;
+  }
+  return soft;
+}
+
 /** Valuta un modello per il giorno `index` della lista continua `days` (passati + previsione). */
 function evaluateModel(days, index, id, elev) {
   const today = days[index].models[id];
   if (!today) return null;
-  const from = Math.max(0, index - RULES.lookbackDays + 1);
-  const span = days.slice(from, index + 1).map((d) => d.models[id]).filter(Boolean);
-  const before = days.slice(Math.max(0, index - 2), index).map((d) => d.models[id]).filter(Boolean);
+  const at = (k) => (k >= 0 ? days[k]?.models[id] : null);
 
-  const snow3 = sum(span.map((m) => m.snow));
-  const wind3 = Math.max(...span.map((m) => m.windMax ?? 0));
-  // Freddo durante la nevicata (SLF: sotto −5/−10 °C, soprattutto a inizio nevicata).
-  const tSnow3 = Math.min(...span.map((m) => (m.snow > 0 ? m.tSnow ?? m.tMin ?? 99 : 99)));
-  const conditions = wind3 >= RULES.strongWind || tSnow3 <= RULES.coldUnfavorable
+  // --- Neve fresca (SLF): oggi e ieri per intero, 2 giorni fa per metà.
+  const span = [0, 1, 2].map((back) => at(index - back));
+  const snowW = span.reduce((t, m, back) => t + (m?.snow ?? 0) * RULES.snowWeights[back], 0);
+  const snow3 = sum(span.map((m) => m?.snow ?? 0));
+  // Condizioni solo dai giorni in cui nevicava.
+  const snowy = span.filter((m) => m && m.snow >= RULES.snowDay);
+  const windSnow = Math.max(0, ...snowy.map((m) => m.windMax ?? 0));
+  const tSnow = Math.min(99, ...snowy.map((m) => m.tSnow ?? m.tMin ?? 99));
+  const conditions = windSnow >= RULES.strongWind || tSnow <= RULES.coldUnfavorable
     ? 'sfavorevoli'
-    : wind3 >= RULES.moderateWind ? 'medie' : 'favorevoli';
-  const threshold = RULES.critical[conditions];
+    : windSnow >= RULES.moderateWind ? 'medie' : 'favorevoli';
+  const [low, high] = RULES.critical[conditions];
+  // Fondo debole: almeno 5 giorni secchi prima del primo giorno di neve (SLF: vecchia superficie incoerente).
+  let first = -1;
+  for (let back = 2; back >= 0; back--) if ((span[back]?.snow ?? 0) >= RULES.snowDay) { first = index - back; break; }
+  let dry = 0;
+  if (first >= 0) for (let k = first - 1; k >= 0 && at(k) && (at(k).snow ?? 0) < RULES.snowDay; k--) dry++;
+  const weakBase = dry >= RULES.dryBefore;
 
-  // Lastroni: neve soffice negli ultimi 3 giorni e vento che la sposta.
-  const windy = span.filter((m) => (m.windMax ?? 0) >= RULES.transportWind && m.transportDir != null);
-  const transport = windy.sort((a, b) => b.windMax - a.windMax)[0] || null;
-  const windSlab = snow3 >= RULES.softSnow && !!transport;
+  // --- Accumuli: vento ≥ 30 km/h su almeno 10 cm di neve soffice, durante o dopo la nevicata.
+  const windDays = [0, 1, 2, 3]
+    .map((back) => ({ back, m: at(index - back) }))
+    .filter(({ back, m }) => m && (m.windMax ?? 0) >= RULES.transportWind && m.transportDir != null
+      && softSnowAt(days, index - back, id) >= RULES.softSnow);
+  const fresh = windDays.filter((w) => w.back <= 1);
+  const transport = (fresh.length ? fresh : windDays).map((w) => w.m).sort((x, y) => y.windMax - x.windMax)[0] || null;
 
+  const before = days.slice(Math.max(0, index - 2), index).map((d) => d.models[id]).filter(Boolean);
   const snowBefore = sum(before.map((m) => m.snow));
   const sunny = today.cloud != null && today.cloud < RULES.sunnyCloud;
   const freezingOk = today.freezingMax != null ? today.freezingMax < elev : today.tMax != null && today.tMax <= 1;
 
   return {
     snow3,
-    wind3,
+    snowW,
     conditions,
-    threshold,
-    critical: snow3 >= threshold,
-    windSlab,
+    low,
+    high,
+    critHigh: snowW >= high,
+    critLow: snowW >= low,
+    weakBase: weakBase && snowW >= RULES.critical.sfavorevoli[0],
+    windSlab: windDays.length > 0,
+    windSlabFresh: fresh.length > 0,
     transportDir: transport?.transportDir ?? null,
     transportSpeed: transport?.windMax ?? null,
+    soft: softSnowAt(days, index, id),
     rain: (today.rain ?? 0) >= RULES.rainMm,
     firstSun: snowBefore >= RULES.warmingSnow && sunny && (today.tMax ?? -99) >= 0,
-    noRefreeze:
-      today.tNightMin != null && (today.tNightMin > 2 || (today.tNightMin > 0 && (today.nightCloud ?? 0) >= 60)),
+    noRefreeze: noRefreeze(today),
     sunny,
     calm: today.windMax != null && today.windMax < RULES.okWind,
     freezingOk,
@@ -153,15 +192,26 @@ export function evaluateDay(days, index, elev, { aspects = [], bulletin = null }
   const signals = [];
   const add = (id, level, certainty, text, source) => certainty && signals.push({ id, level, certainty, text, source });
 
-  // 1. Neve fresca critica (SLF).
-  const crit = share(evals, 'critical');
-  if (crit) {
-    const cond = median(evals.filter((e) => e.critical).map((e) => e.threshold));
-    const condName = Object.keys(RULES.critical).find((k) => RULES.critical[k] === cond) || '';
-    add('critical', 'chiusa', crit, `${cm(snow3)} cm di neve fresca in 3 giorni: oltre la soglia critica (${cond} cm con condizioni ${condName})`, 'SLF');
+  // 1. Neve fresca critica (SLF): dentro l'intervallo ▲, oltre il limite alto ✕.
+  const snowW = median(evals.map((e) => e.snowW));
+  const condOf = (list) => {
+    const lo = median(list.map((e) => e.low));
+    return Object.keys(RULES.critical).find((k) => RULES.critical[k][0] === lo) || 'medie';
+  };
+  const high = share(evals, 'critHigh');
+  const low = share(evals, 'critLow');
+  if (high) {
+    const c = condOf(evals.filter((e) => e.critHigh));
+    add('critical', 'chiusa', high, `${cm(snowW)} cm di neve fresca recente: oltre la soglia critica (${RULES.critical[c][1]} cm con condizioni ${c})`, 'SLF');
+  } else if (low) {
+    const c = condOf(evals.filter((e) => e.critLow));
+    const [lo, hi] = RULES.critical[c];
+    add('critical', 'avviso', low, `${cm(snowW)} cm di neve fresca recente: vicino alla soglia critica (${lo}-${hi} cm con condizioni ${c})`, 'SLF');
+  } else {
+    add('weakBase', 'avviso', share(evals, 'weakBase'), `${cm(snowW)} cm di neve fresca su un fondo rimasto secco per ${RULES.dryBefore} giorni o più: può legarsi male`, 'SLF');
   }
 
-  // 2. Lastroni da vento: versanti sottovento.
+  // 2. Accumuli: versanti sottovento.
   let loaded = [];
   let slabSource = null;
   const slabProblem = bulletin?.problems?.find((p) => p.type === 'wind_slab' && problemAtElevation(p, elev));
@@ -170,15 +220,19 @@ export function evaluateDay(days, index, elev, { aspects = [], bulletin = null }
     slabSource = 'bollettino';
   }
   const slab = share(evals, 'windSlab');
+  const slabFresh = share(evals, 'windSlabFresh');
   if (slab && !slabSource) {
-    const dir = meanDirection(evals.filter((e) => e.windSlab).map((e) => e.transportDir));
+    const withSlab = evals.filter((e) => e.windSlab);
+    const dir = meanDirection(withSlab.map((e) => e.transportDir));
     loaded = leeSectors(dir);
     slabSource = 'modelli';
-    const speed = median(evals.filter((e) => e.windSlab).map((e) => e.transportSpeed));
+    const speed = median(withSlab.map((e) => e.transportSpeed));
+    const soft = median(withSlab.map((e) => e.soft));
     const from = SECTORS[sectorIndex(dir)];
-    add('windSlab', 'versanti', slab, `neve soffice e vento da ${from} fino a ${Math.round(speed)} km/h negli ultimi 3 giorni: accumuli probabili sui versanti ${loaded.join(', ')}`, 'SLF, gm.6');
+    const when = slabFresh ? 'accumuli freschi' : 'accumuli di 2-3 giorni fa, in via di stabilizzazione';
+    add('windSlab', 'versanti', slab, `${cm(soft)} cm di neve soffice e vento da ${from} fino a ${Math.round(speed)} km/h: ${when} sui versanti ${loaded.join(', ')}`, 'SLF, EAWS');
   } else if (slabSource) {
-    add('windSlab', 'versanti', 'sì', `bollettino: neve ventata ${slabProblem.where}${loaded.length < 8 ? `, versanti ${loaded.join(', ')}` : ', tutte le esposizioni'}`, 'bollettino');
+    add('windSlab', 'versanti', 'sì', `bollettino: accumuli di neve ventata ${slabProblem.where}${loaded.length < 8 ? `, versanti ${loaded.join(', ')}` : ', tutte le esposizioni'}`, 'bollettino');
   }
 
   // 3. Pioggia su neve.
@@ -211,15 +265,21 @@ export function evaluateDay(days, index, elev, { aspects = [], bulletin = null }
       ok: share(evals, 'freezingOk') === 'sì',
       text: med('freezingMax') != null ? `zero termico ${Math.round(med('freezingMax') / 100) * 100} m` : 'zero termico n.d.',
     },
-    { id: 'fresh', label: 'neve recente', ok: snow3 >= RULES.softSnow, bonus: true, text: `${cm(snow3)} cm in 3 giorni` },
+    { id: 'fresh', label: 'neve recente', ok: snow3 >= 5, bonus: true, text: `${cm(snow3)} cm in 3 giorni` },
   ];
 
-  // Versanti chiusi dai lastroni: se l'utente ha scelto i suoi versanti, contano solo quelli.
+  // Versanti degli accumuli: se l'utente ha scelto i suoi versanti, contano solo quelli.
+  // Freschi (vento oggi o ieri) e sicuri: ✕ sui tuoi versanti, ▲ senza versanti scelti.
+  // Vecchi (2-3 giorni): ▲. Solo "possibile": restano sulla rosa senza cambiare il segno.
   const closedOn = loaded.filter((s) => !aspects.length || aspects.includes(s));
   const slabSignal = signals.find((s) => s.id === 'windSlab');
   if (slabSignal) {
-    if (aspects.length && closedOn.length) slabSignal.level = slabSignal.certainty === 'sì' ? 'chiusa' : 'avviso';
-    else if (aspects.length) slabSignal.level = 'info';
+    const fromBulletin = slabSource === 'bollettino';
+    const sure = slabSignal.certainty === 'sì';
+    const freshSure = fromBulletin || slabFresh === 'sì';
+    if (!sure) slabSignal.level = 'info';
+    else if (aspects.length && !closedOn.length) slabSignal.level = 'info';
+    else if (aspects.length && freshSure) slabSignal.level = 'chiusa';
     else slabSignal.level = 'avviso';
   }
 
