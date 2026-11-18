@@ -216,26 +216,53 @@ document.addEventListener(
 
 // Spiegazione della Finestra buona (tasto ⓘ): neve fresca e accumuli, con il perché delle regole.
 const sg = (st) => `<span class="win legend win-${st}" aria-hidden="true"></span>`;
-const WINDOW_HELP = `<div class="win-help">
-  <p>Ogni giorno, alla quota del posto, guardiamo due segnali di pericolo valanghe: neve fresca e accumuli. Ognuno dà un segno: ${sg('aperta')} nessun segnale, ${sg('avvisi')} attenzione, ${sg('chiusa')} pericolo. Il giorno prende il segno più grave; senza segnali conta il meteo (${sg('meteo')} meteo non buono). Il bollettino valanghe, quando c'è, ha l'ultima parola. Le regole valgono per pendii ripidi, sopra 30°: su pendii poco ripidi il pericolo è più basso.</p>
-  <h3>Neve fresca</h3>
-  <p>La neve appena caduta non è ancora legata al manto sottostante: il pericolo è massimo durante e subito dopo la nevicata, poi la neve si assesta e si lega. Per questo sommiamo la neve di oggi e di ieri per intero e quella di 2 giorni fa per metà.</p>
-  <p>Quanta neve è troppa dipende da come è caduta (SLF). Con vento forte (40 km/h o più) la neve arriva pressata in lastre su un fondo che non la tiene. Con gran freddo (sotto −7 °C) i primi centimetri restano leggeri e si legano male, e il freddo rallenta l'assestamento. Con vento debole e temperature vicine a 0 °C la neve si lega in fretta. Conta solo il vento dei giorni in cui nevicava.</p>
-  <table class="win-tab"><thead><tr><th>Come è caduta</th><th>${sg('aperta')}</th><th>${sg('avvisi')}</th><th>${sg('chiusa')}</th></tr></thead><tbody>
-    <tr><td>vento forte o gran freddo</td><td>&lt; 10 cm</td><td>10–20</td><td>&gt; 20</td></tr>
-    <tr><td>vento medio (20–40 km/h)</td><td>&lt; 20 cm</td><td>20–30</td><td>&gt; 30</td></tr>
-    <tr><td>vento debole</td><td>&lt; 30 cm</td><td>30–50</td><td>&gt; 50</td></tr>
-  </tbody></table>
-  <p>Fondo debole: se prima della nevicata ci sono stati 5 o più giorni secchi, la superficie vecchia è spesso incoerente e la neve nuova si lega male. Da 10 cm diamo ${sg('avvisi')}.</p>
-  <h3>Accumuli</h3>
-  <p>Il vento solleva la neve soffice dai versanti esposti e la deposita su quelli riparati, dietro creste, nei canali e nelle conche. Gli accumuli sembrano neve bella ma possono staccarsi al passaggio di uno sciatore.</p>
-  <p>Il vento sposta solo neve soffice, anche caduta giorni prima se è rimasta fredda: contiamo la neve degli ultimi 7 giorni e la azzeriamo quando diventa dura (pioggia, una notte senza gelo, una massima di +3 °C o più). Servono almeno 10 cm di neve soffice e vento in quota di almeno 30 km/h, durante o dopo la nevicata: il vento che soffia prima non forma accumuli. Si caricano i versanti opposti al vento e i due accanto (vento da nord-ovest: sud-est, est e sud), colorati sulla rosa.</p>
-  <table class="win-tab"><thead><tr><th>Accumuli</th><th>Segno</th></tr></thead><tbody>
-    <tr><td>freschi (vento oggi o ieri) sui tuoi versanti</td><td>${sg('chiusa')}</td></tr>
-    <tr><td>freschi, senza versanti scelti</td><td>${sg('avvisi')}</td></tr>
-    <tr><td>di 2-3 giorni fa: si stanno stabilizzando</td><td>${sg('avvisi')}</td></tr>
-    <tr><td>previsti da pochi modelli, o su versanti non tuoi</td><td>${sg('aperta')} solo sulla rosa</td></tr>
-  </tbody></table>
+// Ogni fattore è una riga con il suo segno; la spiegazione si apre toccandola.
+const HELP_FACTORS = [
+  ['neve', 'Neve fresca', `${sg('avvisi')} ${sg('chiusa')}`, `
+    <p>La neve appena caduta non è ancora legata al manto sottostante: il pericolo è massimo durante e subito dopo la nevicata, poi la neve si assesta e si lega. Per questo sommiamo la neve di oggi e di ieri per intero e quella di 2 giorni fa per metà.</p>
+    <p>Quanta neve è troppa dipende da come è caduta (SLF). Con vento forte (40 km/h o più) la neve arriva pressata in lastre su un fondo che non la tiene. Con gran freddo (sotto −7 °C) i primi centimetri restano leggeri e si legano male, e il freddo rallenta l'assestamento. Con vento debole e temperature vicine a 0 °C la neve si lega in fretta. Conta solo il vento dei giorni in cui nevicava.</p>
+    <table class="win-tab"><thead><tr><th>Come è caduta</th><th>${sg('aperta')}</th><th>${sg('avvisi')}</th><th>${sg('chiusa')}</th></tr></thead><tbody>
+      <tr><td>vento forte o gran freddo</td><td>&lt; 10 cm</td><td>10–20</td><td>&gt; 20</td></tr>
+      <tr><td>vento medio (20–40 km/h)</td><td>&lt; 20 cm</td><td>20–30</td><td>&gt; 30</td></tr>
+      <tr><td>vento debole</td><td>&lt; 30 cm</td><td>30–50</td><td>&gt; 50</td></tr>
+    </tbody></table>`],
+  ['fondo', 'Fondo debole', sg('avvisi'), `
+    <p>Dopo 5 o più giorni secchi, soprattutto con notti serene e fredde, la superficie della neve vecchia diventa incoerente: la neve nuova ci si lega male (SLF). In questo caso bastano 10 cm per dare ${sg('avvisi')}, mai ${sg('chiusa')} da solo.</p>`],
+  ['accumuli', 'Accumuli', `${sg('avvisi')} ${sg('chiusa')}`, `
+    <p>Il vento solleva la neve soffice dai versanti esposti e la deposita su quelli riparati, dietro creste, nei canali e nelle conche. Gli accumuli sembrano neve bella ma possono staccarsi al passaggio di uno sciatore.</p>
+    <p>Il vento sposta solo neve soffice, anche caduta giorni prima se è rimasta fredda: contiamo la neve degli ultimi 7 giorni e la azzeriamo quando diventa dura (pioggia, una notte senza gelo, una massima di +3 °C o più). Servono almeno 10 cm di neve soffice e vento in quota di almeno 30 km/h, durante o dopo la nevicata: il vento che soffia prima non forma accumuli. Gli accumuli sono più pericolosi durante e subito dopo il vento, poi si stabilizzano in pochi giorni (EAWS).</p>
+    <p>Si caricano i versanti opposti al vento e i due accanto (vento da nord-ovest: sud-est, est e sud), colorati sulla rosa.</p>
+    <table class="win-tab"><thead><tr><th>Accumuli</th><th>Segno</th></tr></thead><tbody>
+      <tr><td>freschi (vento oggi o ieri) sui tuoi versanti</td><td>${sg('chiusa')}</td></tr>
+      <tr><td>freschi, senza versanti scelti</td><td>${sg('avvisi')}</td></tr>
+      <tr><td>di 2-3 giorni fa</td><td>${sg('avvisi')}</td></tr>
+      <tr><td>previsti da pochi modelli, o su versanti non tuoi</td><td>${sg('aperta')} solo sulla rosa</td></tr>
+    </tbody></table>`],
+  ['pioggia', 'Pioggia', sg('chiusa'), `
+    <p>Almeno 2 mm di pioggia alla quota del posto. L'acqua entra nel manto, lo appesantisce e scioglie i legami tra i cristalli: la neve bagnata si stacca facilmente, su tutti i versanti. La pioggia sulla neve fresca è il caso peggiore.</p>`],
+  ['rigelo', 'Niente rigelo', sg('chiusa'), `
+    <p>La notte resta sopra 2 °C, oppure sopra 0 °C con cielo coperto (le nuvole trattengono il calore). Se la neve non gela di notte non si forma la crosta portante del mattino: è molle e instabile già dalle prime ore. Con una notte serena e fredda, invece, al mattino il manto è solido.</p>`],
+  ['sole', 'Primo sole dopo la nevicata', sg('avvisi'), `
+    <p>Almeno 10 cm nei 2 giorni prima e oggi cielo sereno con massima sopra 0 °C. Il primo riscaldamento forte, prima che la neve nuova si sia assestata, fa partire molte valanghe spontanee (SLF): meglio uscire presto e scendere prima che il sole scaldi i versanti a sud, est e ovest.</p>`],
+  ['bollettino', 'Bollettino valanghe', `${sg('avvisi')} ${sg('chiusa')}`, `
+    <p>Grado 4 o 5 ${sg('chiusa')}, grado 3 ${sg('avvisi')}. Diamo ${sg('avvisi')} anche quando segnala strati deboli persistenti (strati fragili sepolti, difficili da vedere e capaci di staccarsi da lontano) o neve bagnata alla quota del posto. Se segnala neve ventata, i versanti degli accumuli sono i suoi.</p>
+    <p>Il bollettino c'è per oggi e domani: per gli altri giorni il giudizio viene solo da meteo e neve, e il pallino verde è pieno a metà.</p>`],
+  ['meteo', 'Meteo', `${sg('aperta')} ${sg('meteo')}`, `
+    <p>Senza segnali di pericolo il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono tutte e tre:</p>
+    <ul>
+      <li><b>sole</b>: nuvole sotto il 40% di giorno, per vedere il terreno e i segni di pericolo;</li>
+      <li><b>vento debole</b>: vento in quota sotto 30 km/h, per stare bene in cresta e non spostare neve;</li>
+      <li><b>zero termico sotto la quota</b>: la neve resta fredda e asciutta.</li>
+    </ul>
+    <p>La neve recente (almeno 5 cm in 3 giorni) non cambia il segno: è un'informazione in più.</p>`],
+  ['modelli', 'Accordo tra i modelli', '', `
+    <p>Ogni regola viene controllata su ogni modello meteo. Se la vede almeno metà dei modelli il segnale è sicuro; se la vede almeno un quarto è "possibile". Un pericolo solo possibile dà ${sg('avvisi')} invece di ${sg('chiusa')}.</p>`],
+];
+const windowHelp = () => `<div class="win-help">
+  <p>Ogni giorno, alla quota del posto, controlliamo i fattori qui sotto. Il giorno prende il segno più grave: ${sg('chiusa')} pericolo, ${sg('avvisi')} attenzione; senza segnali ${sg('aperta')} se il meteo è buono, ${sg('meteo')} se non lo è. Il bollettino valanghe, quando c'è, ha l'ultima parola. Le regole valgono per pendii ripidi, sopra 30°: su pendii poco ripidi il pericolo è più basso. Tocca un fattore per la spiegazione.</p>
+  <div class="help-list">${HELP_FACTORS.map(([id, name, signs, body]) => `<details class="help-item" data-open-key="help|${id}" ${openDays.has(`help|${id}`) ? 'open' : ''}>
+    <summary><span class="help-name">${name}</span><span class="help-signs">${signs}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+    <div class="help-body">${body}</div></details>`).join('')}</div>
   <p class="muted">Fonti: SLF ("Achtung Lawinen!"), EAWS (problemi valanghivi). Il peso della neve di 2 giorni fa è una nostra semplificazione.</p>
 </div>`;
 
@@ -288,7 +315,7 @@ function windowSection(place, band, selDay = null) {
     <summary><h2>Finestra buona <span class="muted small">a ${place.elevations[band]} m · regole SLF ed EAWS</span></h2>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
     <p class="pw-legend win-how"><span class="pw-k">Come funziona</span>${infoBtn('window')}</p>
-    ${state.info.window ? WINDOW_HELP : ''}
+    ${state.info.window ? windowHelp() : ''}
     <ol class="win-list">${items}</ol>
     <div class="aspect-pick"><span class="muted small">I tuoi versanti</span><div class="aspects">${picker}</div></div>
   </details>`;
