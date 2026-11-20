@@ -57,17 +57,22 @@ export function modelScore(days, i, id, elev) {
   return fresh * f;
 }
 
-/** Livello di polvere per ogni giorno di `days` (lista continua: passati + previsione). */
-export function powderDays(days, elev, from = 0) {
+/**
+ * Livello di polvere per ogni giorno di `days` (lista continua: passati + previsione).
+ * `slr`: rapporti neve/acqua per data calcolati con il metodo del PDF (js/slr.js); dove
+ * manca si usa la stima semplice dalla temperatura alla quota.
+ */
+export function powderDays(days, elev, from = 0, slr = null) {
   const out = days.slice(from).map((day, k) => {
     const i = from + k;
     const scores = Object.keys(day.models).map((id) => modelScore(days, i, id, elev)).filter((v) => v != null);
     const score = median(scores);
     if (score == null) return { date: day.date, level: null, score: null, ratio: null };
     const level = POWDER.levels.find((l) => score >= l.min);
-    // Rapporto neve/acqua del giorno (es. 12 = 12:1): mediana dei modelli, dalla temperatura mentre nevica.
+    // Rapporto neve/acqua del giorno (es. 12 = 12:1): dal metodo del PDF se c'è, altrimenti
+    // mediana dei modelli dalla temperatura mentre nevica.
     const ratios = Object.values(day.models).filter((m) => m.snow >= 0.5 && m.tSnow != null).map((m) => snowRatio(m.tSnow));
-    const ratio = median(ratios);
+    const ratio = slr?.[day.date] ?? median(ratios);
     return { date: day.date, level: level.id, label: level.label, score, ratio: ratio == null ? null : Math.round(ratio) };
   });
   // Il giorno dopo la nevicata il rapporto vale ancora, se la neve non è stata rovinata (livello diverso da "no").
