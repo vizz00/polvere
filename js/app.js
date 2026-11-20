@@ -231,7 +231,7 @@ const HELP_FACTORS = [
     <p>Dopo 5 o più giorni secchi la superficie della neve vecchia diventa incoerente e la neve nuova ci si lega male: in quel caso bastano 10 cm per ${sg('avvisi')}.</p>`],
   ['accumuli', 'Vento e accumuli', sg('avvisi'), `
     <p>Il vento solleva la neve soffice dai versanti esposti e la deposita su quelli riparati, dietro creste, nei canali e nelle conche. Gli accumuli sembrano neve bella ma possono staccarsi al passaggio di uno sciatore.</p>
-    <p>Avvisiamo quando oggi o ieri il vento in quota supera 30 km/h e ci sono almeno 10 cm di neve soffice (neve degli ultimi 7 giorni, azzerata da pioggia, una notte senza gelo o una massima di +3 °C). Si caricano i versanti opposti al vento e i due accanto, colorati sulla rosa. Se il bollettino segnala neve ventata, la rosa mostra i suoi versanti. Se hai scelto i tuoi versanti e il vento non li carica, la riga resta senza segno.</p>`],
+    <p>Avvisiamo quando oggi o ieri il vento in cresta (alla quota della cima) supera 30 km/h e ci sono almeno 10 cm di neve soffice (neve degli ultimi 7 giorni, azzerata da pioggia, una notte senza gelo o una massima di +3 °C). Si caricano i versanti opposti al vento e i due accanto, colorati sulla rosa. Se il bollettino segnala neve ventata, la rosa mostra i suoi versanti. Se hai scelto i tuoi versanti e il vento non li carica, la riga resta senza segno.</p>`],
   ['pioggia', 'Pioggia', sg('chiusa'), `
     <p>Almeno 2 mm di pioggia alla quota del posto. L'acqua entra nel manto, lo appesantisce e scioglie i legami tra i cristalli: la neve bagnata si stacca facilmente, su tutti i versanti.</p>`],
   ['rigelo', 'Notte senza gelo', sg('chiusa'), `
@@ -241,7 +241,7 @@ const HELP_FACTORS = [
   ['bollettino', 'Bollettino valanghe', `${sg('avvisi')} ${sg('chiusa')}`, `
     <p>Quando c'è (oggi e domani) decide lui il segno del giorno: grado 4 o 5 ${sg('chiusa')}, grado 3 almeno ${sg('avvisi')}. I nostri segnali restano nell'elenco perché sono più precisi sul posto, ma con il bollettino arrivano al massimo a ${sg('avvisi')}. Dopodomani il bollettino non c'è: decidono i nostri segnali e il pallino verde è pieno a metà.</p>`],
   ['meteo', 'Meteo', `${sg('aperta')} ${sg('meteo')}`, `
-    <p>Senza pericoli il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono sole (nuvole sotto il 40%), vento in quota sotto 30 km/h e zero termico sotto la quota.</p>`],
+    <p>Senza pericoli il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono sole (nuvole sotto il 40%), vento sotto 30 km/h e zero termico sotto la quota.</p>`],
   ['modelli', 'Modelli d’accordo', '', `
     <p>Per neve, vento e pioggia usiamo il valore su cui i modelli meteo sono d'accordo: mettiamo i modelli in fila, togliamo quelli lontani dal gruppo (più di 15 km/h di vento, più di metà della neve o della pioggia) e facciamo la media degli altri. Un modello che prevede da solo un valore molto diverso non conta. Se i modelli si dividono a metà, per prudenza conta il gruppo più alto.</p>`],
 ];
@@ -523,7 +523,7 @@ function snowCard(place, { detail = false } = {}) {
         <span class="sc-wd ${isWeekend(d.date) ? 'we' : ''}">${DAY_LETTER[dayDate(d.date).getDay()]}</span>
         <span class="sc-dn ${isWeekend(d.date) ? 'we' : ''}">${dayNum(d.date)}</span>
         ${detail ? dayIcon(d) : ''}
-        ${detail ? `<span class="fc-w" title="${d.wind ? `Vento massimo in quota: ${Math.round(d.wind.speed)} km/h da ${compass(d.wind.dir)}` : ''}">${d.wind ? `${windArrow(d.wind.dir)}${Math.round(d.wind.speed)}` : '–'}</span>` : ''}
+        ${detail ? `<span class="fc-w" title="${d.wind ? `Vento massimo: ${Math.round(d.wind.speed)} km/h da ${compass(d.wind.dir)}` : ''}">${d.wind ? `${windArrow(d.wind.dir)}${Math.round(d.wind.speed)}` : '–'}</span>` : ''}
         ${detail ? `<span class="pw-r${p?.carried ? ' pw-carry' : ''}${p?.ratio > 12 ? ' pw-light' : ''}"${p?.ratio ? ` title="Rapporto neve/acqua ${p.ratio}:1${p.carried ? ' (neve del giorno prima)' : ''}"` : ''}>${p?.ratio && (cm >= 1 || p.carried) ? `${p.ratio}:1` : ''}</span>` : ''}
       </a>`;
     })
@@ -616,7 +616,7 @@ function forecastCard(place) {
         <span class="fc-max" title="Massima ${d.tMax != null ? Math.round(d.tMax) : '–'}°, minima ${d.tMin != null ? Math.round(d.tMin) : '–'}°">${d.tMax != null ? Math.round(d.tMax) : '–'}°</span>
         ${dayIcon(d)}
         ${snowDay(d)}
-        <span class="fc-w" title="${d.wind ? `Vento massimo in quota: ${Math.round(d.wind.speed)} km/h da ${compass(d.wind.dir)}` : ''}">${d.wind ? `${windArrow(d.wind.dir)}${Math.round(d.wind.speed)}` : '–'}</span>
+        <span class="fc-w" title="${d.wind ? `Vento massimo: ${Math.round(d.wind.speed)} km/h da ${compass(d.wind.dir)}` : ''}">${d.wind ? `${windArrow(d.wind.dir)}${Math.round(d.wind.speed)}` : '–'}</span>
         ${windowMark(wins[i])}
       </a>`,
     )
@@ -684,7 +684,7 @@ function renderOverview() {
       <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e, per i prossimi 3 giorni, il segno dei pericoli. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
       <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dal 6° giorno restano solo ECMWF e GFS.</p>
       <p>Segno dei prossimi 3 giorni: <span class="win win-chiusa legend"></span> pericolo · <span class="win win-avvisi legend"></span> attenzione · <span class="win win-aperta legend"></span> nessun pericolo, meteo buono (<span class="win win-aperta win-nobul legend"></span> senza bollettino) · <span class="win win-meteo legend"></span> nessun pericolo, meteo non buono. Un pericolo conta più del meteo.</p>
-      <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: in quota (circa 3000 m), km/h e provenienza. Raffiche: vicino al suolo.</p>
+      <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: alla quota del posto, km/h e provenienza. Raffiche: vicino al suolo.</p>
     </details>`;
 }
 
@@ -701,7 +701,7 @@ const CHARTS = [
   { id: 'snowTotal', help: "Quanta neve nuova si accumula da oggi in avanti alla quota scelta. Dove la linea sale sta nevicando; dove resta piatta no.", label: 'Neve totale', unit: 'cm', min: 0, minSpan: 10, step: (r) => (r <= 40 ? 5 : r <= 80 ? 10 : 20), tick: (v) => `${v}cm` },
   { id: 'snowLine', help: "La quota sopra cui cade neve e sotto cui piove.", label: 'Quota neve', unit: 'm', min: 0, ref: 'elev', step: (r) => (r <= 3000 ? 500 : 1000), tick: (v) => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.0', '')}k` : `${v}`) },
   { id: 'temp', help: "Temperatura dell'aria alla quota scelta.", label: 'Temperatura', unit: '°C', ref: 0, step: (r) => (r <= 40 ? 5 : 10), tick: (v) => `${v}°` },
-  { id: 'wind', help: "Vento medio a circa 3000 m, quello delle creste, con la direzione da cui arriva.", label: 'Vento in quota', unit: 'km/h', min: 0, minSpan: 40, bands: true, arrows: true, step: (r) => (r <= 80 ? 10 : 20) },
+  { id: 'wind', help: "Vento alla quota scelta (valle, metà o cima), con la direzione da cui arriva. In pianura è quello vicino al suolo.", label: 'Vento', unit: 'km/h', min: 0, minSpan: 40, bands: true, arrows: true, step: (r) => (r <= 80 ? 10 : 20) },
   { id: 'gust', help: "Le punte di vento vicino al suolo, più forti del vento medio. Contano per gli impianti e per stare in cresta o in vetta.", label: 'Raffiche', unit: 'km/h', min: 0, minSpan: 40, bands: true, step: (r) => (r <= 80 ? 10 : 20) },
   { id: 'cloud', help: "Quanta parte del cielo è coperta.", label: 'Nuvole', unit: '%', min: 0, max: 100, step: () => 25, tick: (v) => `${v}%` },
 ];

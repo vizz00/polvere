@@ -14,13 +14,60 @@ export const HOURLY_VARS = [
   'temperature_2m',
   'precipitation',
   'freezing_level_height',
+  'wind_speed_10m',
+  'wind_direction_10m',
   'wind_speed_700hPa',
   'wind_direction_700hPa',
+  'wind_speed_600hPa',
+  'wind_direction_600hPa',
   'cloud_cover',
   'wind_gusts_10m',
 ];
 
-// Vento in quota da cui la neve soffice inizia a essere spostata (valore indicativo, km/h).
+// Vento alla quota del posto. I modelli danno il vento vicino al suolo (10 m) e a livelli fissi
+// in quota (700 hPa ≈ 3000 m, 600 hPa ≈ 4200 m). Fino a 1500 m si usa il vento al suolo,
+// sopra si passa gradualmente a quello dei livelli in quota (interpolazione sulla quota).
+export const WIND_LEVELS = [
+  { key: '10m', h: 1500 },
+  { key: '700hPa', h: 3000 },
+  { key: '600hPa', h: 4200 },
+];
+
+/** Serie orarie { speed, dir } del vento alla quota `elev` per il modello `id`. */
+export function windAt(h, id, elev) {
+  const sp = (k) => h[`wind_speed_${k}_${id}`];
+  const dr = (k) => h[`wind_direction_${k}_${id}`];
+  const L = WIND_LEVELS;
+  let lo = L[0];
+  let hi = L[0];
+  if (elev >= L[L.length - 1].h) lo = hi = L[L.length - 1];
+  else if (elev > L[0].h) {
+    const j = L.findIndex((l) => l.h >= elev);
+    lo = L[j - 1];
+    hi = L[j];
+  }
+  const f = hi === lo ? 0 : (elev - lo.h) / (hi.h - lo.h);
+  const sLo = sp(lo.key) || [];
+  const sHi = sp(hi.key) || [];
+  const dLo = dr(lo.key) || [];
+  const dHi = dr(hi.key) || [];
+  // Riserva: se mancano entrambi i livelli (modello senza quel dato) si usa il 700 hPa.
+  const s7 = sp('700hPa') || [];
+  const d7 = dr('700hPa') || [];
+  const n = h.time.length;
+  const speed = new Array(n);
+  const dir = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = sLo[i] ?? null;
+    const b = sHi[i] ?? null;
+    speed[i] = a != null && b != null ? a + (b - a) * f : a ?? b ?? s7[i] ?? null;
+    const near = f < 0.5 ? dLo[i] ?? dHi[i] : dHi[i] ?? dLo[i];
+    dir[i] = near ?? d7[i] ?? null;
+  }
+  return { speed, dir };
+}
+
+// Vento in cresta da cui la neve soffice inizia a essere spostata (valore indicativo, km/h).
 export const TRANSPORT_WIND_KMH = 25;
 
 // Un modello "copre" un giorno se ha almeno 20 ore valide di precipitazione.
@@ -71,7 +118,7 @@ export function median(values) {
  * (un oggetto con `hourly` e chiavi con suffisso del modello).
  * Restituisce { days: [{ date, models: {id: {...}}, snow: {min,max,median,n}, ... }] }
  */
-export function summarizePoint(point, elev, models = MODELS) {
+export function summarizePoint(point, elev, models = MODELS, ridgeElev = elev) {
   const h = point.hourly;
   const times = h.time;
   const dayIndex = new Map();
@@ -92,8 +139,9 @@ export function summarizePoint(point, elev, models = MODELS) {
       if (valid.length < MIN_HOURS_PER_DAY) continue;
       const t = get('temperature_2m') || [];
       const fl = get('freezing_level_height') || [];
-      const ws = get('wind_speed_700hPa') || [];
-      const wd = get('wind_direction_700hPa') || [];
+      // Vento alla quota del posto (meteo, polvere) e alla quota della cima (accumuli in cresta).
+      const { speed: ws, dir: wd } = windAt(h, m.id, elev);
+      const { speed: rs, dir: rd } = ridgeElev === elev ? { speed: ws, dir: wd } : windAt(h, m.id, ridgeElev);
       const cc = get('cloud_cover') || [];
       const wg = get('wind_gusts_10m') || [];
       let gustMax = null;
@@ -102,6 +150,7 @@ export function summarizePoint(point, elev, models = MODELS) {
       let flMax = null;
       let windMax = null;
       let windDir = null;
+      let ridgeWindMax = null;
       let rain = 0;
       let tx = 0;
       let ty = 0;
@@ -121,13 +170,14 @@ export function summarizePoint(point, elev, models = MODELS) {
           snowW += hs;
         }
         if (pr[i] > 0) rain += pr[i] * (1 - snowFraction(elev, t[i], fl[i]));
-        // Direzione del vento che sposta la neve: media vettoriale pesata sulle ore con vento ≥ soglia.
-        if (ws[i] != null && wd[i] != null && ws[i] >= TRANSPORT_WIND_KMH) {
-          const rad = (wd[i] * Math.PI) / 180;
-          tx += ws[i] * Math.sin(rad);
-          ty += ws[i] * Math.cos(rad);
+        // Direzione del vento che sposta la neve (in cresta): media vettoriale pesata sulle ore con vento ≥ soglia.
+        if (rs[i] != null && rd[i] != null && rs[i] >= TRANSPORT_WIND_KMH) {
+          const rad = (rd[i] * Math.PI) / 180;
+          tx += rs[i] * Math.sin(rad);
+          ty += rs[i] * Math.cos(rad);
           transportHours++;
         }
+        if (rs[i] != null && (ridgeWindMax == null || rs[i] > ridgeWindMax)) ridgeWindMax = rs[i];
         // Notte (0-6): rigelo della neve.
         if (hour <= 6) {
           if (t[i] != null) tNightMin = tNightMin == null ? t[i] : Math.min(tNightMin, t[i]);
@@ -149,6 +199,7 @@ export function summarizePoint(point, elev, models = MODELS) {
         freezingMax: flMax,
         windMax,
         windDir,
+        ridgeWindMax,
         cloud: clouds.length ? clouds.reduce((a, b) => a + b, 0) / clouds.length : null,
         tMin: tvals.length ? Math.min(...tvals) : null,
         tMax: tvals.length ? Math.max(...tvals) : null,
@@ -264,7 +315,8 @@ export function pointNow(point, elev, models = MODELS, now = new Date()) {
   const i = hourIndex(h.time, now);
   if (i < 0) return null;
   const at = (v) => median(models.map((m) => h[`${v}_${m.id}`]?.[i] ?? null));
-  const dirs = models.map((m) => h[`wind_direction_700hPa_${m.id}`]?.[i]).filter((x) => x != null);
+  const winds = models.map((m) => windAt(h, m.id, elev));
+  const dirs = winds.map((w) => w.dir[i]).filter((x) => x != null);
   let x = 0;
   let y = 0;
   for (const d of dirs) {
@@ -291,7 +343,7 @@ export function pointNow(point, elev, models = MODELS, now = new Date()) {
     now: {
       temp,
       cloud: at('cloud_cover'),
-      wind: at('wind_speed_700hPa'),
+      wind: median(winds.map((w) => w.speed[i] ?? null)),
       windDir: dirs.length ? (((Math.atan2(x, y) * 180) / Math.PI) + 360) % 360 : null,
       gust: at('wind_gusts_10m'),
       precip,
@@ -303,7 +355,7 @@ export function pointNow(point, elev, models = MODELS, now = new Date()) {
 
 /**
  * Serie per i grafici del dettaglio, a passi di `step` ore, dall'ora corrente in avanti.
- * Per ogni modello: neve cumulata, quota neve, temperatura, vento in quota, raffiche, nuvolosità,
+ * Per ogni modello: neve cumulata, quota neve, temperatura, vento alla quota, raffiche, nuvolosità,
  * precipitazione (con la parte nevosa). Più la mediana tra i modelli.
  */
 export function chartSeries(point, elev, models = MODELS, { step = 3, now = new Date() } = {}) {
@@ -322,7 +374,7 @@ export function chartSeries(point, elev, models = MODELS, { step = 3, now = new 
     if (!pr.length) continue;
     const t = g('temperature_2m');
     const fl = g('freezing_level_height');
-    const ws = g('wind_speed_700hPa');
+    const ws = windAt(h, m.id, elev).speed;
     const wg = g('wind_gusts_10m');
     const cc = g('cloud_cover');
     const out = { snowTotal: [], snowLine: [], temp: [], wind: [], gust: [], cloud: [], snow: [], rain: [] };
@@ -372,12 +424,13 @@ export function chartSeries(point, elev, models = MODELS, { step = 3, now = new 
   let prev = 0;
   med.snowTotal = med.snowTotal.map((x) => (prev = Math.max(prev, x ?? prev)));
   // Direzione del vento mediana (media circolare) per le frecce.
+  const dirs = models.map((m) => windAt(h, m.id, elev).dir);
   med.windDir = times.map((_, j) => {
     let x = 0;
     let y = 0;
     let n = 0;
-    for (const m of models) {
-      const d = h[`wind_direction_700hPa_${m.id}`]?.[start + j * step];
+    for (const dm of dirs) {
+      const d = dm[start + j * step];
       if (d == null) continue;
       x += Math.sin((d * Math.PI) / 180);
       y += Math.cos((d * Math.PI) / 180);

@@ -25,12 +25,12 @@ export const RULES = {
   // Accumuli: neve soffice degli ultimi 7 giorni che il vento può spostare.
   softDays: 7,
   softSnow: 10, // cm di neve soffice perché il vento formi accumuli
-  transportWind: 30, // km/h di vento in quota che sposta la neve in quantità
+  transportWind: 30, // km/h di vento in cresta che sposta la neve in quantità
   warmDay: 3, // °C di massima che fanno crosta e azzerano la neve soffice
   rainMm: 2, // mm di pioggia alla quota in un giorno
   warmingSnow: 10, // cm caduti nei 2 giorni prima del primo sole
   sunnyCloud: 40, // % nuvolosità diurna sotto cui il giorno è "sereno"
-  okWind: 30, // km/h: vento in quota accettabile per uscire
+  okWind: 30, // km/h: vento alla quota del posto accettabile per uscire
   days: 3, // segni e segnali solo per oggi, domani e dopodomani: più in là la previsione è troppo incerta
   // Modelli d'accordo: due modelli stanno nello stesso gruppo se non sono più lontani di così.
   windGap: 15, // km/h
@@ -142,7 +142,9 @@ function evaluateModel(days, index, id, elev) {
   const snow3 = sum(span.map((m) => m?.snow ?? 0));
   // Condizioni solo dai giorni in cui nevicava.
   const snowy = span.filter((m) => m && m.snow >= RULES.snowDay);
-  const windSnow = snowy.length ? Math.max(...snowy.map((m) => m.windMax ?? 0)) : 0;
+  // Vento in cresta (quota della cima del posto): è lì che la neve viene spostata e pressata.
+  const ridge = (m) => m?.ridgeWindMax ?? m?.windMax ?? 0;
+  const windSnow = snowy.length ? Math.max(...snowy.map(ridge)) : 0;
   const tSnow = snowy.length ? Math.min(...snowy.map((m) => m.tSnow ?? m.tMin ?? 0)) : 0;
   // Fondo debole: almeno 5 giorni secchi prima del primo giorno di neve (SLF: vecchia superficie incoerente).
   let first = -1;
@@ -150,11 +152,11 @@ function evaluateModel(days, index, id, elev) {
   let dry = 0;
   if (first >= 0) for (let k = first - 1; k >= 0 && at(k) && (at(k).snow ?? 0) < RULES.snowDay; k--) dry++;
 
-  // --- Accumuli: vento in quota (oggi o ieri) su almeno 10 cm di neve soffice, durante o dopo la nevicata.
+  // --- Accumuli: vento in cresta (oggi o ieri) su almeno 10 cm di neve soffice, durante o dopo la nevicata.
   const transport = [0, 1]
     .map((back) => ({ k: index - back, m: at(index - back) }))
     .filter(({ k, m }) => m && m.transportDir != null && softSnowAt(days, k, id) >= RULES.softSnow)
-    .sort((x, y) => (y.m.windMax ?? 0) - (x.m.windMax ?? 0))[0] || null;
+    .sort((x, y) => ridge(y.m) - ridge(x.m))[0] || null;
 
   const before = days.slice(Math.max(0, index - 2), index).map((d) => d.models[id]).filter(Boolean);
   const snowBefore = sum(before.map((m) => m.snow));
@@ -166,7 +168,7 @@ function evaluateModel(days, index, id, elev) {
     windSnow,
     tSnow,
     weakBase: dry >= RULES.dryBefore,
-    slabWind: transport?.m.windMax ?? 0,
+    slabWind: transport ? ridge(transport.m) : 0,
     transportDir: transport?.m.transportDir ?? null,
     slabYesterday: transport != null && transport.k < index,
     rain: today.rain ?? 0,
@@ -265,7 +267,7 @@ export function evaluateDay(days, index, elev, { aspects = [], bulletin = null }
   const med = (k) => median(evals.map((e) => e[k]));
   const conditions = [
     { id: 'sun', label: 'sole', ok: most(evals, 'sunny'), text: `nuvole ${Math.round(med('cloud') ?? 0)}%` },
-    { id: 'calm', label: 'vento debole', ok: most(evals, 'calm'), text: `vento in quota ${Math.round(med('windMax') ?? 0)} km/h` },
+    { id: 'calm', label: 'vento debole', ok: most(evals, 'calm'), text: `vento ${Math.round(med('windMax') ?? 0)} km/h` },
     {
       id: 'freezing',
       label: 'zero termico sotto la quota',

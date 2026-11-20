@@ -6,9 +6,10 @@ import { BANDS } from './places.js';
 const API = 'https://api.open-meteo.com/v1/forecast';
 // Si salva il riassunto per giorno (non la risposta grezza, 3 volte più grande):
 // così ci stanno molti posti nello spazio del browser.
-const CACHE_KEY = 'mm.forecast.v2';
+const CACHE_KEY = 'mm.forecast.v3';
 try {
   localStorage.removeItem('mm.forecast.v1'); // vecchio formato grezzo
+  localStorage.removeItem('mm.forecast.v2'); // vento sempre a 3000 m
 } catch {
   /* ignorato */
 }
@@ -23,7 +24,9 @@ function buildPoints(places) {
   const points = [];
   for (const place of places) {
     for (const band of BANDS) {
-      points.push({ placeId: place.id, band: band.id, lat: place.lat, lon: place.lon, elev: place.elevations[band.id] });
+      // ridge: quota della cima, per il vento che forma gli accumuli in cresta.
+      const ridge = place.single ? place.elevations.valle : place.elevations.cima;
+      points.push({ placeId: place.id, band: band.id, lat: place.lat, lon: place.lon, elev: place.elevations[band.id], ridge });
     }
   }
   return points;
@@ -53,7 +56,8 @@ function splitPast(point) {
 }
 
 // Riassunto di un punto: giorni (passati e futuri) e situazione "adesso".
-const compactPoint = (raw, elev) => (raw ? { days: summarizePoint(raw, elev).days, now: pointNow(raw, elev) } : null);
+const compactPoint = (raw, elev, ridge = elev) =>
+  raw ? { days: summarizePoint(raw, elev, MODELS, Math.max(ridge ?? elev, elev)).days, now: pointNow(raw, elev) } : null;
 
 function readCache(key) {
   try {
@@ -93,7 +97,7 @@ export async function loadForecast(places, { force = false } = {}) {
       if (!res.ok) throw new Error(`Open-Meteo ha risposto ${res.status}`);
       const raw = await res.json();
       const list = Array.isArray(raw) ? raw : [raw];
-      points2 = points.map((p, i) => compactPoint(list[i], p.elev));
+      points2 = points.map((p, i) => compactPoint(list[i], p.elev, p.ridge));
       fetchedAt = Date.now();
       writeCache(url, points2);
     } catch (err) {

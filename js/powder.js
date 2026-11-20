@@ -14,7 +14,7 @@ export const POWDER = {
     { id: 'no', min: -Infinity, label: 'Niente polvere' },
   ],
   yesterdayWeight: 0.6,
-  windModerate: 25, // km/h in quota: neve lavorata
+  windModerate: 25, // km/h alla quota del posto: neve lavorata
   windStrong: 40, // km/h: neve battuta o portata via
   rainMm: 1,
 };
