@@ -1,10 +1,10 @@
 // Grafici SVG del dettaglio posto: una linea spessa con la mediana dei modelli
 // e linee sottili per ogni modello. Nessuna libreria esterna.
 
-// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 6 giorni
-// (gli altri con lo swipe); su schermi larghi la pagina si allarga e mostra tutti i giorni.
+// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 3 giorni,
+// su schermi larghi la pagina si allarga e mostra 7 giorni. Gli altri si vedono scorrendo di lato.
 let W = 400;
-let PAGE_DAYS = 6;
+let PAGE_DAYS = 3;
 const PAD = { l: 38, r: 8, t: 10, b: 34 };
 
 /** Adatta i grafici alla larghezza disponibile (in pixel). Restituisce true se è cambiato qualcosa. */
@@ -12,14 +12,14 @@ export function setChartWidth(px) {
   const wide = px >= 700;
   // Su computer: 1 unità del disegno = 1,3 pixel, così scritte e linee restano di misura giusta.
   const w = wide ? Math.round(px / 1.3) : 400;
-  const days = wide ? 99 : 6;
+  const days = wide ? 7 : 3;
   if (w === W && days === PAGE_DAYS) return false;
   W = w;
   PAGE_DAYS = days;
   return true;
 }
 
-// Larghezza totale del grafico: 6 giorni occupano una pagina, il resto continua a destra.
+// Larghezza totale del grafico: PAGE_DAYS giorni occupano una pagina, il resto continua a destra.
 function geometry(times) {
   const days = new Set(times.map((t) => t.slice(0, 10))).size;
   const pageW = W - PAD.l - PAD.r;
@@ -58,12 +58,17 @@ function path(values, x, y) {
   return d;
 }
 
-// Righe verticali a mezzanotte ed etichette dei giorni a mezzogiorno.
+// Righe verticali a mezzanotte, righe leggere alle 6, 12 e 18 con l'ora scritta in basso,
+// etichette dei giorni a mezzogiorno sotto l'asse.
 function dayAxis(times, x, top, bottom, labels = true) {
   let out = '';
   times.forEach((t, i) => {
     const hh = t.slice(11, 13);
     if (hh === '00') out += `<line class="grid-day" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${bottom}"/>`;
+    if (hh === '06' || hh === '12' || hh === '18') {
+      out += `<line class="grid-hour" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${bottom}"/>`;
+      if (labels) out += `<text class="ax-hour" x="${x(i)}" y="${bottom - 3}" text-anchor="middle">${Number(hh)}</text>`;
+    }
     if (labels && hh === '12') {
       const d = new Date(`${t.slice(0, 10)}T12:00:00`);
       const we = d.getDay() === 0 || d.getDay() === 6;
@@ -85,8 +90,13 @@ export function lineChart(series, opts) {
   const ids = Object.keys(byModel);
   const all = [...ids.flatMap((id) => byModel[id][opts.key]), ...median[opts.key]].filter((v) => v != null);
   if (!all.length) return '<p class="muted">Dato non disponibile per questi modelli.</p>';
-  let lo = opts.min ?? Math.min(...all);
-  let hi = opts.max ?? Math.max(...all);
+  // Scala adattata ai valori: la mediana si vede sempre per intero, i modelli fino al 90% dei loro valori;
+  // le punte di un modello che "spara" da solo escono dal bordo in alto (o in basso).
+  const med = median[opts.key].filter((v) => v != null);
+  const sorted = [...all].sort((a, b) => a - b);
+  const pct = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  let lo = opts.min ?? Math.min(pct(0.05), ...(med.length ? med : [pct(0.05)]));
+  let hi = opts.max ?? Math.max(pct(0.9), ...(med.length ? med : [pct(0.9)]));
   if (opts.ref) {
     lo = Math.min(lo, opts.ref.value);
     hi = Math.max(hi, opts.ref.value);
@@ -100,14 +110,17 @@ export function lineChart(series, opts) {
   const top = opts.arrows ? PAD.t + 14 : PAD.t; // spazio per le frecce del vento sopra il grafico
   const { Wd, plotW, pageW } = geometry(times);
   const x = (i) => PAD.l + (i / Math.max(1, n - 1)) * plotW;
-  const y = (v) => top + (1 - (v - lo) / (hi - lo)) * (bottom - top);
-  // Inizio di ogni pagina di 6 giorni: lì si ripetono le etichette (quota, fasce del vento).
+  // Un po' d'aria sopra il massimo: le linee in cima non toccano il bordo.
+  const air = 12;
+  const y = (v) => top + air + (1 - (v - lo) / (hi - lo)) * (bottom - top - air);
+  // Inizio di ogni pagina: lì si ripetono le etichette (quota, fasce del vento).
   const pages = [];
   for (let px = PAD.l; px < PAD.l + plotW - 1; px += pageW) pages.push(px);
 
   let svg = '';
   for (const b of opts.bands || []) {
-    const y1 = y(Math.min(hi, b.to));
+    if (b.from >= hi) continue;
+    const y1 = b.to >= hi ? top : y(b.to);
     const y2 = y(Math.max(lo, b.from));
     if (y2 <= y1) continue;
     svg += `<rect class="band ${b.cls}" x="${PAD.l}" y="${y1}" width="${plotW}" height="${y2 - y1}"/>`;
@@ -125,6 +138,9 @@ export function lineChart(series, opts) {
     svg += `<line class="ref" x1="${PAD.l}" x2="${Wd - PAD.r}" y1="${y(opts.ref.value)}" y2="${y(opts.ref.value)}"/>`;
     refLabel = `<span class="ref-tag" style="top:${(((y(opts.ref.value) - 4) / H) * 100).toFixed(2)}%">${esc(opts.ref.label)}</span>`;
   }
+  // Le linee restano dentro l'area del grafico.
+  const clip = `clip-${opts.key}`;
+  svg += `<clipPath id="${clip}"><rect x="0" y="${top}" width="${Wd}" height="${bottom - top}"/></clipPath><g clip-path="url(#${clip})">`;
   for (const id of ids) {
     if (id === opts.highlight) continue;
     svg += `<path class="ln-model" d="${path(byModel[id][opts.key], x, y)}"/>`;
@@ -135,6 +151,7 @@ export function lineChart(series, opts) {
   } else {
     svg += `<path class="ln-median" d="${path(median[opts.key], x, y)}"/>`;
   }
+  svg += '</g>';
   if (opts.arrows) {
     opts.arrows.forEach((deg, i) => {
       if (deg == null || times[i].slice(11, 13) % 12 !== 0) return;
@@ -152,7 +169,7 @@ export function lineChart(series, opts) {
   };
 }
 
-/** Grafico + striscia in un contenitore che scorre in orizzontale: 6 giorni visibili, gli altri con lo swipe. */
+/** Grafico + striscia in un contenitore che scorre in orizzontale: PAGE_DAYS giorni visibili, gli altri con lo swipe. */
 export function scrollCharts(chart, strip) {
   if (typeof chart === 'string') return chart + (strip || '');
   return `<div class="chart-wrap${W > 400 ? ' wide' : ''}">
