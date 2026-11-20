@@ -355,6 +355,7 @@ let refreshSeq = 0;
 
 async function refresh(force = false) {
   const seq = ++refreshSeq;
+  if (state.detail?.error) state.detail = null; // grafici andati in errore: si riprova al prossimo disegno
   refreshAvalanche(force);
   const r = route();
   if (force && r.tab === 'posto') {
@@ -706,7 +707,7 @@ function renderOverview() {
     <details class="explain">
       <summary>Come leggere</summary>
       <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e, per i prossimi 3 giorni, il segno dei pericoli. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
-      <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dal 6° giorno restano solo ECMWF e GFS.</p>
+      <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dall'8° giorno restano solo ECMWF e GFS.</p>
       <p>Segno dei prossimi 3 giorni: <span class="win win-chiusa legend"></span> pericolo · <span class="win win-avvisi legend"></span> attenzione · <span class="win win-aperta legend"></span> nessun pericolo, meteo buono (<span class="win win-aperta win-nobul legend"></span> senza bollettino) · <span class="win win-meteo legend"></span> nessun pericolo, meteo non buono. Un pericolo conta più del meteo.</p>
       <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: alla quota del posto, km/h e provenienza. Raffiche: vicino al suolo.</p>
     </details>`;
@@ -738,8 +739,8 @@ const WIND_BANDS = [
 
 async function ensureDetail(place, band, force = false) {
   const key = `${place.id}|${band}|${place.elevations[band]}`;
-  // Anche dopo un errore non si riprova da soli (senza rete ogni disegno ripartirebbe):
-  // si riprova trascinando giù o cambiando quota.
+  // Anche dopo un errore non si riprova da soli a ogni ridisegno (senza rete andrebbe avanti all'infinito):
+  // si riprova con il tasto Riprova o trascinando giù.
   if (!force && state.detail?.key === key && (state.detail.data || state.detail.loading || state.detail.error)) return;
   // Aggiornando si tengono i grafici vecchi a schermo finché arrivano i nuovi.
   const old = state.detail?.key === key ? state.detail.data : null;
@@ -834,7 +835,7 @@ app.addEventListener(
 function chartBlock(place, band) {
   const d = state.detail;
   if (!d || d.loading) return '<p class="loading">Scarico i grafici a 10 giorni…</p>';
-  if (d.error) return `<p class="muted">${esc(d.error)}</p>`;
+  if (d.error) return `<section class="charts"><div class="notice"><p>${esc(d.error)}</p><button type="button" class="btn" data-retry-detail>Riprova</button></div></section>`;
   const series = d.data.series;
   setChartWidth(chartPx());
   const cur = CHARTS.find((c) => c.id === state.prefs.chart) || CHARTS[0];
@@ -1137,6 +1138,11 @@ app.addEventListener('click', (e) => {
   const asp = e.target.closest('[data-aspect]');
   if (asp) return toggleAspect(asp.dataset.placeAspect, asp.dataset.aspect);
   if (e.target.closest('[data-retry]')) return refresh(true);
+  if (e.target.closest('[data-retry-detail]')) {
+    const p = placeById(route().id);
+    if (p) ensureDetail(p, p.single ? 'valle' : state.prefs.band, true);
+    return render();
+  }
   const rm = e.target.closest('[data-remove-place]');
   if (rm) return removePlace(rm.dataset.removePlace);
   const copy = e.target.closest('[data-transfer-copy], [data-transfer-share]');
@@ -1159,6 +1165,7 @@ const BACK_LABEL = { panoramica: 'Località', valanghe: 'Valanghe', radar: 'Rada
 let prevHash = location.hash;
 window.addEventListener('hashchange', () => {
   state.menu = false;
+  if (state.detail?.error) state.detail = null; // cambiando pagina i grafici in errore si riprovano
   const from = route(prevHash);
   if (route().tab === 'posto' && from.tab !== 'posto' && BACK_LABEL[from.tab]) {
     state.backHref = prevHash || '#/';

@@ -314,8 +314,9 @@ function slrUrl(point, levels) {
 export async function loadSlr(place, band, { force = false } = {}) {
   const point = { lat: place.lat, lon: place.lon, elev: place.elevations[band] };
   const key = slrUrl(point, SLR_LEVELS);
+  let c = null;
   try {
-    const c = JSON.parse(localStorage.getItem(SLR_KEY) || 'null');
+    c = JSON.parse(localStorage.getItem(SLR_KEY) || 'null');
     if (!force && c?.key === key && Date.now() - c.fetchedAt < MAX_AGE_MS) return c.data;
   } catch {
     /* ignorato */
@@ -323,10 +324,7 @@ export async function loadSlr(place, band, { force = false } = {}) {
   // Se va in errore con tutti i livelli si riprova senza 850 e 400 hPa.
   for (const levels of [SLR_LEVELS, [700, 600, 500]]) {
     try {
-      const res = await fetch(slrUrl(point, levels));
-      if (!res.ok) continue;
-      const raw = await res.json();
-      if (raw?.error) continue;
+      const raw = await fetchJson(slrUrl(point, levels));
       const data = dailySlr(Array.isArray(raw) ? raw[0] : raw, point.elev, SLR_MODELS, levels);
       try {
         localStorage.setItem(SLR_KEY, JSON.stringify({ key, fetchedAt: Date.now(), data }));
@@ -334,9 +332,10 @@ export async function loadSlr(place, band, { force = false } = {}) {
         /* spazio pieno */
       }
       return data;
-    } catch {
-      /* si riprova */
+    } catch (err) {
+      if (!err.server) break; // senza rete riprovare non serve
     }
   }
-  return {};
+  // Senza rete: l'ultima copia dello stesso posto, se c'è (altrimenti la stima semplice).
+  return c?.key === key ? c.data : {};
 }
