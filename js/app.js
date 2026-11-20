@@ -699,7 +699,7 @@ function favButton(place) {
 // step: distanza tra le righe dell'asse verticale (in base all'escursione); tick: testo con l'unità.
 const CHARTS = [
   { id: 'snowTotal', help: "Quanta neve nuova si accumula da oggi in avanti alla quota scelta. Dove la linea sale sta nevicando; dove resta piatta no.", label: 'Neve totale', unit: 'cm', min: 0, minSpan: 10, step: (r) => (r <= 40 ? 5 : r <= 80 ? 10 : 20), tick: (v) => `${v}cm` },
-  { id: 'snowLine', help: "La quota sopra cui cade neve e sotto cui piove.", label: 'Quota neve', unit: 'm', min: 0, ref: 'elev', step: (r) => (r <= 3000 ? 500 : 1000), tick: (v) => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.0', '')}k` : `${v}`) },
+  { id: 'snowLine', help: "La quota sopra cui cade neve e sotto cui piove.", label: 'Quota neve', unit: 'm', ref: 'elev', step: (r) => (r <= 3000 ? 500 : 1000), tick: (v) => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.0', '')}k` : `${v}`) },
   { id: 'temp', help: "Temperatura dell'aria alla quota scelta.", label: 'Temperatura', unit: '°C', ref: 0, step: (r) => (r <= 40 ? 5 : 10), tick: (v) => `${v}°` },
   { id: 'wind', help: "Vento alla quota scelta (valle, metà o cima), con la direzione da cui arriva. In pianura è quello vicino al suolo.", label: 'Vento', unit: 'km/h', min: 0, minSpan: 40, bands: true, arrows: true, step: (r) => (r <= 80 ? 10 : 20) },
   { id: 'gust', help: "Le punte di vento vicino al suolo, più forti del vento medio. Contano per gli impianti e per stare in cresta o in vetta.", label: 'Raffiche', unit: 'km/h', min: 0, minSpan: 40, bands: true, step: (r) => (r <= 80 ? 10 : 20) },

@@ -1,8 +1,8 @@
 // Grafici SVG del dettaglio posto: una linea spessa con la mediana dei modelli
 // e linee sottili per ogni modello. Nessuna libreria esterna.
 
-// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 6 giorni
-// (gli altri con lo swipe); su schermi larghi la pagina si allarga e mostra tutti i giorni.
+// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 6 giorni,
+// su schermi larghi la pagina si allarga e mostra 7 giorni. Gli altri si vedono scorrendo di lato.
 let W = 400;
 let PAGE_DAYS = 6;
 const PAD = { l: 38, r: 8, t: 10, b: 34 };
@@ -12,7 +12,7 @@ export function setChartWidth(px) {
   const wide = px >= 700;
   // Su computer: 1 unità del disegno = 1,3 pixel, così scritte e linee restano di misura giusta.
   const w = wide ? Math.round(px / 1.3) : 400;
-  const days = wide ? 99 : 6;
+  const days = wide ? 7 : 6;
   if (w === W && days === PAGE_DAYS) return false;
   W = w;
   PAGE_DAYS = days;
@@ -85,8 +85,13 @@ export function lineChart(series, opts) {
   const ids = Object.keys(byModel);
   const all = [...ids.flatMap((id) => byModel[id][opts.key]), ...median[opts.key]].filter((v) => v != null);
   if (!all.length) return '<p class="muted">Dato non disponibile per questi modelli.</p>';
-  let lo = opts.min ?? Math.min(...all);
-  let hi = opts.max ?? Math.max(...all);
+  // Scala adattata ai valori: la mediana si vede sempre per intero, i modelli fino al 90% dei loro valori;
+  // le punte di un modello che "spara" da solo escono dal bordo in alto (o in basso).
+  const med = median[opts.key].filter((v) => v != null);
+  const sorted = [...all].sort((a, b) => a - b);
+  const pct = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  let lo = opts.min ?? Math.min(pct(0.05), ...(med.length ? med : [pct(0.05)]));
+  let hi = opts.max ?? Math.max(pct(0.9), ...(med.length ? med : [pct(0.9)]));
   if (opts.ref) {
     lo = Math.min(lo, opts.ref.value);
     hi = Math.max(hi, opts.ref.value);
@@ -125,6 +130,9 @@ export function lineChart(series, opts) {
     svg += `<line class="ref" x1="${PAD.l}" x2="${Wd - PAD.r}" y1="${y(opts.ref.value)}" y2="${y(opts.ref.value)}"/>`;
     refLabel = `<span class="ref-tag" style="top:${(((y(opts.ref.value) - 4) / H) * 100).toFixed(2)}%">${esc(opts.ref.label)}</span>`;
   }
+  // Le linee restano dentro l'area del grafico.
+  const clip = `clip-${opts.key}`;
+  svg += `<clipPath id="${clip}"><rect x="0" y="${top}" width="${Wd}" height="${bottom - top}"/></clipPath><g clip-path="url(#${clip})">`;
   for (const id of ids) {
     if (id === opts.highlight) continue;
     svg += `<path class="ln-model" d="${path(byModel[id][opts.key], x, y)}"/>`;
@@ -135,6 +143,7 @@ export function lineChart(series, opts) {
   } else {
     svg += `<path class="ln-median" d="${path(median[opts.key], x, y)}"/>`;
   }
+  svg += '</g>';
   if (opts.arrows) {
     opts.arrows.forEach((deg, i) => {
       if (deg == null || times[i].slice(11, 13) % 12 !== 0) return;
