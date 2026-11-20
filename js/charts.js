@@ -1,10 +1,10 @@
 // Grafici SVG del dettaglio posto: una linea spessa con la mediana dei modelli
 // e linee sottili per ogni modello. Nessuna libreria esterna.
 
-// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 6 giorni,
+// Larghezza di una "pagina" visibile e giorni che ci stanno: sul telefono 400 e 3 giorni,
 // su schermi larghi la pagina si allarga e mostra 7 giorni. Gli altri si vedono scorrendo di lato.
 let W = 400;
-let PAGE_DAYS = 6;
+let PAGE_DAYS = 3;
 const PAD = { l: 38, r: 8, t: 10, b: 34 };
 
 /** Adatta i grafici alla larghezza disponibile (in pixel). Restituisce true se è cambiato qualcosa. */
@@ -12,14 +12,14 @@ export function setChartWidth(px) {
   const wide = px >= 700;
   // Su computer: 1 unità del disegno = 1,3 pixel, così scritte e linee restano di misura giusta.
   const w = wide ? Math.round(px / 1.3) : 400;
-  const days = wide ? 7 : 6;
+  const days = wide ? 7 : 3;
   if (w === W && days === PAGE_DAYS) return false;
   W = w;
   PAGE_DAYS = days;
   return true;
 }
 
-// Larghezza totale del grafico: 6 giorni occupano una pagina, il resto continua a destra.
+// Larghezza totale del grafico: PAGE_DAYS giorni occupano una pagina, il resto continua a destra.
 function geometry(times) {
   const days = new Set(times.map((t) => t.slice(0, 10))).size;
   const pageW = W - PAD.l - PAD.r;
@@ -111,7 +111,7 @@ export function lineChart(series, opts) {
   const { Wd, plotW, pageW } = geometry(times);
   const x = (i) => PAD.l + (i / Math.max(1, n - 1)) * plotW;
   const y = (v) => top + (1 - (v - lo) / (hi - lo)) * (bottom - top);
-  // Inizio di ogni pagina di 6 giorni: lì si ripetono le etichette (quota, fasce del vento).
+  // Inizio di ogni pagina: lì si ripetono le etichette (quota, fasce del vento).
   const pages = [];
   for (let px = PAD.l; px < PAD.l + plotW - 1; px += pageW) pages.push(px);
 
@@ -166,7 +166,7 @@ export function lineChart(series, opts) {
   };
 }
 
-/** Grafico + striscia in un contenitore che scorre in orizzontale: 6 giorni visibili, gli altri con lo swipe. */
+/** Grafico + striscia in un contenitore che scorre in orizzontale: PAGE_DAYS giorni visibili, gli altri con lo swipe. */
 export function scrollCharts(chart, strip) {
   if (typeof chart === 'string') return chart + (strip || '');
   return `<div class="chart-wrap${W > 400 ? ' wide' : ''}">
