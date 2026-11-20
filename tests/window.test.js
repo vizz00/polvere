@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { evaluateDay, evaluateWindows, leeSectors, meanDirection, problemAtElevation, statusLabel } from '../js/window.js';
+import { agreed, evaluateDay, evaluateWindows, leeSectors, meanDirection, problemAtElevation, statusLabel } from '../js/window.js';
 import { summarizePoint } from '../js/snow.js';
 
 // Giorno sintetico con gli stessi valori per 3 modelli.
@@ -44,7 +44,7 @@ test('due giorni di neve con vento forte: chiusa (esempio di Riccardo)', () => {
   assert.deepEqual(w.loaded, ['E', 'SE', 'S']);
 });
 
-test('accumuli freschi: avviso sui versanti sottovento, chiusa se è il mio versante', () => {
+test('accumuli: vento oltre 30 km/h su neve soffice, al massimo ▲ anche sul mio versante', () => {
   const days = [
     day('2026-01-01', { snow: 12, windMax: 15 }),
     day('2026-01-02', { windMax: 15 }),
@@ -54,19 +54,18 @@ test('accumuli freschi: avviso sui versanti sottovento, chiusa se è il mio vers
   const any = evaluateDay(days, 3, ELEV);
   assert.equal(any.status, 'avvisi');
   assert.deepEqual(any.loaded, ['SE', 'S', 'SO']);
-  assert.equal(evaluateDay(days, 3, ELEV, { aspects: ['S'] }).status, 'chiusa');
-  // versante non tuo: nessun avviso (resta solo il vento forte per il meteo)
-  assert.equal(evaluateDay(days, 3, ELEV, { aspects: ['N'] }).status, 'meteo');
+  assert.match(any.signals.find((s) => s.id === 'windSlab').text, /^Vento oltre 30 km\/h da nord\|circa 35 km\/h: possibili accumuli a sud-est, sud, sud-ovest/);
+  assert.equal(evaluateDay(days, 3, ELEV, { aspects: ['S'] }).status, 'avvisi');
+  // versante non tuo: la riga resta senza segno, il giorno non cambia (resta il vento forte per il meteo)
+  const notMine = evaluateDay(days, 3, ELEV, { aspects: ['N'] });
+  assert.equal(notMine.status, 'meteo');
+  assert.equal(notMine.signals.find((s) => s.id === 'windSlab').level, 'info');
 });
 
-test('accumuli di 2-3 giorni fa: solo avviso anche sul mio versante', () => {
-  const days = [
-    day('d1', { snow: 12, windMax: 35, transportDir: 0, transportHours: 6 }),
-    day('d2'), day('d3'), day('d4'),
-  ];
-  const w = evaluateDay(days, 3, ELEV, { aspects: ['S'] });
-  assert.equal(w.status, 'avvisi');
-  assert.equal(w.signals.find((s) => s.id === 'windSlab').level, 'avviso');
+test('accumuli: il vento di ieri conta ancora, quello di 2 giorni fa no', () => {
+  const days = [day('d1', { snow: 12 }), day('d2', { windMax: 35, transportDir: 0 }), day('d3'), day('d4')];
+  assert.match(evaluateDay(days, 2, ELEV).signals.find((s) => s.id === 'windSlab').text, /^Ieri vento oltre 30 km\/h/);
+  assert.ok(!evaluateDay(days, 3, ELEV).signals.some((s) => s.id === 'windSlab'));
 });
 
 test('accumuli: poca neve, vento debole o vento solo prima della neve non contano', () => {
@@ -92,22 +91,26 @@ test('accumuli: neve vecchia ma soffice si sposta; pioggia o caldo la induriscon
   assert.ok(evaluateDay(mild, 5, ELEV).signals.some((s) => s.id === 'windSlab'));
 });
 
-test('accumuli solo "possibili": versanti sulla rosa ma il segno non cambia', () => {
+test('modelli d\'accordo: un modello che spara da solo non conta', () => {
+  assert.equal(agreed([14, 18, 20, 22, 25, 66], () => 15), 19.8);
+  // divisi a metà: per prudenza il gruppo più alto
+  assert.equal(agreed([20, 20, 20, 50, 50, 50], () => 15), 50);
   const days = [day('d1', { snow: 15 }), day('d2')];
-  days[1].models.a.windMax = 35;
+  days[1].models.a.windMax = 66;
   days[1].models.a.transportDir = 0;
   const w = evaluateDay(days, 1, ELEV);
-  assert.equal(w.status, 'aperta');
-  assert.equal(w.signals.find((s) => s.id === 'windSlab').level, 'info');
-  assert.deepEqual(w.loaded, ['SE', 'S', 'SO']);
+  assert.ok(!w.signals.some((s) => s.id === 'windSlab'));
+  assert.deepEqual(w.loaded, []);
 });
 
 test('neve fresca: soglie SLF a intervallo, giallo dentro e rosso oltre', () => {
-  // vento debole → 30-50 cm
+  // vento debole → 30-40 cm
   const calm = (cmToday) => [day('d1'), day('d2', { snow: 0 }), day('d3', { snow: cmToday, cloud: 90 })];
   assert.ok(!evaluateDay(calm(25), 2, ELEV).signals.some((s) => s.id === 'critical'));
   assert.equal(evaluateDay(calm(35), 2, ELEV).signals.find((s) => s.id === 'critical').level, 'avviso');
-  assert.equal(evaluateDay(calm(55), 2, ELEV).signals.find((s) => s.id === 'critical').level, 'chiusa');
+  const red = evaluateDay(calm(45), 2, ELEV).signals.find((s) => s.id === 'critical');
+  assert.equal(red.level, 'chiusa');
+  assert.equal(red.text, 'Neve ultimi 3 giorni: 45 cm|caduta con vento debole, oltre i 40 cm critici');
   // freddo mentre nevica → 10-20 cm
   const cold = [day('d1'), day('d2'), day('d3', { snow: 12, tSnow: -12, cloud: 90 })];
   assert.equal(evaluateDay(cold, 2, ELEV).signals.find((s) => s.id === 'critical').level, 'avviso');
@@ -144,19 +147,23 @@ test('meteo non buono senza segnali: nuvole o zero termico sopra la quota', () =
   assert.equal(evaluateDay(warm, 2, ELEV).status, 'meteo');
 });
 
-test('se metà dei modelli non è d\'accordo il segnale è "possibile"', () => {
+test('pioggia di un solo modello non conta', () => {
   const days = [day('d1'), day('d2'), day('d3')];
   days[2].models.a.rain = 5;
-  const w = evaluateDay(days, 2, ELEV);
-  const s = w.signals.find((x) => x.id === 'rain');
-  assert.equal(s.certainty, 'possibile');
-  assert.equal(w.status, 'avvisi');
+  assert.equal(evaluateDay(days, 2, ELEV).status, 'aperta');
 });
 
-test('il bollettino ha la precedenza: grado 4 chiude, neve ventata dà i versanti', () => {
+test('il bollettino ha la precedenza: grado 4 chiude, 3 dà almeno ▲, neve ventata dà i versanti', () => {
   const days = [day('d1'), day('d2'), day('d3')];
   const b4 = { max: 4, problems: [] };
   assert.equal(evaluateDay(days, 2, ELEV, { bulletin: b4 }).status, 'chiusa');
+  assert.equal(evaluateDay(days, 2, ELEV, { bulletin: { max: 3, problems: [] } }).status, 'avvisi');
+  // con il bollettino i nostri segnali arrivano al massimo a ▲
+  const rain = [day('d1'), day('d2'), day('d3', { rain: 5 })];
+  assert.equal(evaluateDay(rain, 2, ELEV).status, 'chiusa');
+  const capped = evaluateDay(rain, 2, ELEV, { bulletin: { max: 2, problems: [] } });
+  assert.equal(capped.status, 'avvisi');
+  assert.equal(capped.signals.find((s) => s.id === 'rain').level, 'avviso');
   const slab = {
     max: 2,
     problems: [{ type: 'wind_slab', where: 'sopra 2400 m', aspectList: ['N', 'NW'], elevation: { lowerBound: '2400' } }],
@@ -174,30 +181,31 @@ test('quota del problema: limite del bosco = 2000 m', () => {
   assert.equal(problemAtElevation({ elevation: null }, 2500), true);
 });
 
-test('risposta reale Open-Meteo: una finestra per ogni giorno, senza errori', () => {
+test('risposta reale Open-Meteo: segni solo per i prossimi 3 giorni, senza errori', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/open-meteo-cervinia.json', import.meta.url)));
   const list = Array.isArray(fixture) ? fixture : [fixture];
   const s = summarizePoint(list[0], 2050);
   const ws = evaluateWindows({ past: [], days: s.days }, 2050);
   assert.equal(ws.length, s.days.length);
-  for (const w of ws) assert.ok(['aperta', 'avvisi', 'chiusa', 'meteo', 'nd'].includes(w.status));
+  ws.forEach((w, i) => {
+    if (i < 3) assert.ok(['aperta', 'avvisi', 'chiusa', 'meteo', 'nd'].includes(w.status));
+    else assert.equal(w, null);
+  });
 });
 
-test('un segnale "possibile" conta più del meteo: nuvoloso con pioggia possibile dà avvisi', () => {
-  const days = [day('d1'), day('d2'), day('d3', { cloud: 90 })];
-  days[2].models.a.rain = 5;
+test('un pericolo conta più del meteo: nuvoloso con pioggia dà la croce', () => {
+  const days = [day('d1'), day('d2'), day('d3', { cloud: 90, rain: 5 })];
   const w = evaluateDay(days, 2, ELEV);
-  assert.equal(w.status, 'avvisi');
+  assert.equal(w.status, 'chiusa');
   assert.equal(w.weatherOk, false);
-  assert.equal(statusLabel(w), 'Avvisi, meteo non buono');
 });
 
-test('senza bollettino la finestra buona lo dice', () => {
+test('senza bollettino il segno lo dice', () => {
   const days = [day('d1'), day('d2'), day('d3')];
   const w = evaluateDay(days, 2, ELEV);
   assert.equal(w.noBulletin, true);
-  assert.equal(statusLabel(w), 'Buona per meteo e neve, senza bollettino');
+  assert.equal(statusLabel(w), 'Nessun pericolo da meteo e neve, senza bollettino');
   const withB = evaluateDay(days, 2, ELEV, { bulletin: { max: 1, problems: [] } });
   assert.equal(withB.noBulletin, false);
-  assert.equal(statusLabel(withB), 'Finestra buona');
+  assert.equal(statusLabel(withB), 'Nessun pericolo, meteo buono');
 });

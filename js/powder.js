@@ -1,6 +1,6 @@
 // Qualità della polvere: stima per giorno, dai dati di ogni modello (poi mediana).
 // Non è una misura: dice quanto sarà bella la neve fresca, non se si può andare
-// (per quello c'è la finestra buona in js/window.js).
+// (per quello ci sono i pericoli dei prossimi 3 giorni in js/window.js).
 //
 // Si parte dalla neve caduta nelle ultime 48 ore (oggi pesa di più di ieri) e la si
 // riduce se: era neve pesante (nevicata poco fredda), c'è stato vento forte, sole e

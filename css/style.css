@@ -711,3 +711,18 @@ h1, h2, h3, .page-title, .summary-main, .total-num, .place-head .ss-cell b, .dl 
 .help-item[open] .chev { transform: rotate(180deg); }
 .help-body { padding: 0 2px 6px; }
 .windows .help-item:not([open]) .chev { transform: none; }
+
+/* Prossimi 3 giorni: icone dei pericoli nella riga chiusa, elenco dei pericoli quando è aperta */
+.win-why { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.sig-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.sig-chip .ico { width: 17px; height: 17px; }
+.sig-chip.sig-snow .ico { color: var(--accent); }
+.sig-chip.sig-wind .ico, .sig-chip.sig-sun .ico { color: var(--win-warn); }
+.sig-chip.sig-rain .ico { color: #4fd1c5; }
+.sig-chip.sig-warm .ico { color: var(--win-closed); }
+.win-day .win-sigs { margin: 0; gap: 8px; font-size: 14px; flex: 1; min-width: 0; }
+.win-sigs .sig { display: flex; gap: 8px; align-items: flex-start; color: var(--text); }
+.win-sigs .sig .win, .sig-none { flex: none; width: 14px; height: 14px; margin-top: 3px; }
+.win-sigs .sig b { font-weight: 600; }
+.win-sigs .sig-empty { color: var(--muted); font-style: italic; }
+.win-sigs .sig-meteo { color: var(--muted); font-size: 12px; padding-top: 6px; border-top: 1px solid var(--line); }

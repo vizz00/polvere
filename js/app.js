@@ -138,12 +138,14 @@ const ICON = {
   snow: '<path d="M12 2v20M3.5 7l17 10M20.5 7l-17 10M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   freezing: '<path d="M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="17" r="1.8" fill="currentColor"/><path d="M16.5 6h3M16.5 9.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   wind: '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  rain: '<path d="M12 3c3 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.5 6-11z" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  sun: '<circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   window: '<circle cx="7" cy="12" r="3.2" fill="var(--win-closed)"/><circle cx="12" cy="12" r="3.2" fill="var(--win-warn)"/><circle cx="17" cy="12" r="3.2" fill="var(--win-open)"/>',
 };
 const icon = (name, label) =>
   `<svg class="ico" viewBox="0 0 24 24" role="img" aria-label="${label}"><title>${label}</title>${ICON[name]}</svg>`;
 
-// ---------- finestra buona ----------
+// ---------- prossimi 3 giorni (pericoli) ----------
 
 const placeAspects = (id) => state.prefs.aspects?.[id] || [];
 
@@ -161,13 +163,13 @@ function windowsFor(place, band) {
 
 function windowTitle(w) {
   const lines = [statusLabel(w)];
-  for (const s of w.signals) if (s.level !== 'info') lines.push(`${s.certainty === 'possibile' ? 'possibile: ' : ''}${s.text}`);
-  if (w.weatherOk === false) lines.push(w.conditions.filter((c) => !c.bonus && !c.ok).map((c) => `no ${c.label} (${c.text})`).join(', '));
+  for (const s of w.signals) if (s.level !== 'info') lines.push(s.text.replace('|', ': '));
+  if (!w.signals.length && w.weatherOk === false) lines.push(w.conditions.filter((c) => !c.ok).map((c) => `no ${c.label} (${c.text})`).join(', '));
   return lines.join('\n');
 }
 
-// Segno colorato: ● verde aperta, ◐ verde a metà se manca il bollettino, ▲ giallo con avvisi,
-// ✕ rosso chiusa, ○ meteo non buono.
+// Segno colorato: ● verde nessun pericolo e meteo buono, ◐ verde a metà se manca il bollettino,
+// ▲ arancione attenzione, ✕ rosso pericolo, ○ nessun pericolo ma meteo non buono. Solo per i prossimi 3 giorni.
 // Forme diverse oltre ai colori: si distinguono anche da chi confonde rosso e verde.
 const winClass = (w) => `win win-${w.status}${w.status === 'aperta' && w.noBulletin ? ' win-nobul' : ''}`;
 function windowMark(w) {
@@ -192,12 +194,12 @@ function aspectRose(loaded, mine = [], size = 64) {
   }">${paths}<text x="${r}" y="9" text-anchor="middle">N</text></svg>`;
 }
 
-// Giorni della finestra buona aperti dall'utente: restano aperti quando la pagina si ridisegna.
+// Giorni dei prossimi 3 giorni aperti dall'utente: restano aperti quando la pagina si ridisegna.
 const openDays = new Set();
 document.addEventListener(
   'toggle',
   (e) => {
-    // Sezione Finestra buona aperta o chiusa: si ricorda (senza ridisegnare la pagina).
+    // Sezione Prossimi 3 giorni aperta o chiusa: si ricorda (senza ridisegnare la pagina).
     if (e.target.matches?.('[data-windows]')) {
       if (state.prefs.windowsOpen !== e.target.open) {
         state.prefs = { ...state.prefs, windowsOpen: e.target.open };
@@ -214,57 +216,47 @@ document.addEventListener(
   true,
 );
 
-// Spiegazione della Finestra buona (tasto ⓘ): neve fresca e accumuli, con il perché delle regole.
+// Spiegazione dei Prossimi 3 giorni (tasto ⓘ): i pericoli controllati, con il perché delle regole.
 const sg = (st) => `<span class="win legend win-${st}" aria-hidden="true"></span>`;
 // Ogni fattore è una riga con il suo segno; la spiegazione si apre toccandola.
 const HELP_FACTORS = [
   ['neve', 'Neve fresca', `${sg('avvisi')} ${sg('chiusa')}`, `
     <p>La neve appena caduta non è ancora legata al manto sottostante: il pericolo è massimo durante e subito dopo la nevicata, poi la neve si assesta e si lega. Per questo sommiamo la neve di oggi e di ieri per intero e quella di 2 giorni fa per metà.</p>
-    <p>Quanta neve è troppa dipende da come è caduta (SLF). Con vento forte (40 km/h o più) la neve arriva pressata in lastre su un fondo che non la tiene. Con gran freddo (sotto −7 °C) i primi centimetri restano leggeri e si legano male, e il freddo rallenta l'assestamento. Con vento debole e temperature vicine a 0 °C la neve si lega in fretta. Conta solo il vento dei giorni in cui nevicava.</p>
+    <p>Quanta neve è troppa dipende da come è caduta (SLF). Con vento forte (40 km/h o più) la neve arriva pressata in lastre su un fondo che non la tiene. Con gran freddo (sotto −7 °C) i primi centimetri restano leggeri e si legano male. Con vento debole e temperature vicine a 0 °C la neve si lega in fretta. Conta solo il vento dei giorni in cui nevicava.</p>
     <table class="win-tab"><thead><tr><th>Come è caduta</th><th>${sg('aperta')}</th><th>${sg('avvisi')}</th><th>${sg('chiusa')}</th></tr></thead><tbody>
       <tr><td>vento forte o gran freddo</td><td>&lt; 10 cm</td><td>10–20</td><td>&gt; 20</td></tr>
       <tr><td>vento medio (20–40 km/h)</td><td>&lt; 20 cm</td><td>20–30</td><td>&gt; 30</td></tr>
-      <tr><td>vento debole</td><td>&lt; 30 cm</td><td>30–50</td><td>&gt; 50</td></tr>
-    </tbody></table>`],
-  ['fondo', 'Fondo debole', sg('avvisi'), `
-    <p>Dopo 5 o più giorni secchi, soprattutto con notti serene e fredde, la superficie della neve vecchia diventa incoerente: la neve nuova ci si lega male (SLF). In questo caso bastano 10 cm per dare ${sg('avvisi')}, mai ${sg('chiusa')} da solo.</p>`],
-  ['accumuli', 'Accumuli', `${sg('avvisi')} ${sg('chiusa')}`, `
+      <tr><td>vento debole</td><td>&lt; 30 cm</td><td>30–40</td><td>&gt; 40</td></tr>
+    </tbody></table>
+    <p>Dopo 5 o più giorni secchi la superficie della neve vecchia diventa incoerente e la neve nuova ci si lega male: in quel caso bastano 10 cm per ${sg('avvisi')}.</p>`],
+  ['accumuli', 'Vento e accumuli', sg('avvisi'), `
     <p>Il vento solleva la neve soffice dai versanti esposti e la deposita su quelli riparati, dietro creste, nei canali e nelle conche. Gli accumuli sembrano neve bella ma possono staccarsi al passaggio di uno sciatore.</p>
-    <p>Il vento sposta solo neve soffice, anche caduta giorni prima se è rimasta fredda: contiamo la neve degli ultimi 7 giorni e la azzeriamo quando diventa dura (pioggia, una notte senza gelo, una massima di +3 °C o più). Servono almeno 10 cm di neve soffice e vento in quota di almeno 30 km/h, durante o dopo la nevicata: il vento che soffia prima non forma accumuli. Gli accumuli sono più pericolosi durante e subito dopo il vento, poi si stabilizzano in pochi giorni (EAWS).</p>
-    <p>Si caricano i versanti opposti al vento e i due accanto (vento da nord-ovest: sud-est, est e sud), colorati sulla rosa.</p>
-    <table class="win-tab"><thead><tr><th>Accumuli</th><th>Segno</th></tr></thead><tbody>
-      <tr><td>freschi (vento oggi o ieri) sui tuoi versanti</td><td>${sg('chiusa')}</td></tr>
-      <tr><td>freschi, senza versanti scelti</td><td>${sg('avvisi')}</td></tr>
-      <tr><td>di 2-3 giorni fa</td><td>${sg('avvisi')}</td></tr>
-      <tr><td>previsti da pochi modelli, o su versanti non tuoi</td><td>${sg('aperta')} solo sulla rosa</td></tr>
-    </tbody></table>`],
+    <p>Avvisiamo quando oggi o ieri il vento in quota supera 30 km/h e ci sono almeno 10 cm di neve soffice (neve degli ultimi 7 giorni, azzerata da pioggia, una notte senza gelo o una massima di +3 °C). Si caricano i versanti opposti al vento e i due accanto, colorati sulla rosa. Se il bollettino segnala neve ventata, la rosa mostra i suoi versanti. Se hai scelto i tuoi versanti e il vento non li carica, la riga resta senza segno.</p>`],
   ['pioggia', 'Pioggia', sg('chiusa'), `
-    <p>Almeno 2 mm di pioggia alla quota del posto. L'acqua entra nel manto, lo appesantisce e scioglie i legami tra i cristalli: la neve bagnata si stacca facilmente, su tutti i versanti. La pioggia sulla neve fresca è il caso peggiore.</p>`],
-  ['rigelo', 'Niente rigelo', sg('chiusa'), `
-    <p>La notte resta sopra 2 °C, oppure sopra 0 °C con cielo coperto (le nuvole trattengono il calore). Se la neve non gela di notte non si forma la crosta portante del mattino: è molle e instabile già dalle prime ore. Con una notte serena e fredda, invece, al mattino il manto è solido.</p>`],
+    <p>Almeno 2 mm di pioggia alla quota del posto. L'acqua entra nel manto, lo appesantisce e scioglie i legami tra i cristalli: la neve bagnata si stacca facilmente, su tutti i versanti.</p>`],
+  ['rigelo', 'Notte senza gelo', sg('chiusa'), `
+    <p>La notte resta sopra 2 °C, oppure sopra 0 °C con cielo coperto. Se la neve non gela di notte non si forma la crosta portante del mattino: è molle e instabile già dalle prime ore.</p>`],
   ['sole', 'Primo sole dopo la nevicata', sg('avvisi'), `
-    <p>Almeno 10 cm nei 2 giorni prima e oggi cielo sereno con massima sopra 0 °C. Il primo riscaldamento forte, prima che la neve nuova si sia assestata, fa partire molte valanghe spontanee (SLF): meglio uscire presto e scendere prima che il sole scaldi i versanti a sud, est e ovest.</p>`],
+    <p>Almeno 10 cm nei 2 giorni prima e oggi cielo sereno con massima sopra 0 °C. Il primo riscaldamento forte fa partire molte valanghe spontanee (SLF): meglio uscire presto e scendere prima che il sole scaldi i versanti a sud, est e ovest.</p>`],
   ['bollettino', 'Bollettino valanghe', `${sg('avvisi')} ${sg('chiusa')}`, `
-    <p>Grado 4 o 5 ${sg('chiusa')}, grado 3 ${sg('avvisi')}. Diamo ${sg('avvisi')} anche quando segnala strati deboli persistenti (strati fragili sepolti, difficili da vedere e capaci di staccarsi da lontano) o neve bagnata alla quota del posto. Se segnala neve ventata, i versanti degli accumuli sono i suoi.</p>
-    <p>Il bollettino c'è per oggi e domani: per gli altri giorni il giudizio viene solo da meteo e neve, e il pallino verde è pieno a metà.</p>`],
+    <p>Quando c'è (oggi e domani) decide lui il segno del giorno: grado 4 o 5 ${sg('chiusa')}, grado 3 almeno ${sg('avvisi')}. I nostri segnali restano nell'elenco perché sono più precisi sul posto, ma con il bollettino arrivano al massimo a ${sg('avvisi')}. Dopodomani il bollettino non c'è: decidono i nostri segnali e il pallino verde è pieno a metà.</p>`],
   ['meteo', 'Meteo', `${sg('aperta')} ${sg('meteo')}`, `
-    <p>Senza segnali di pericolo il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono tutte e tre:</p>
-    <ul>
-      <li><b>sole</b>: nuvole sotto il 40% di giorno, per vedere il terreno e i segni di pericolo;</li>
-      <li><b>vento debole</b>: vento in quota sotto 30 km/h, per stare bene in cresta e non spostare neve;</li>
-      <li><b>zero termico sotto la quota</b>: la neve resta fredda e asciutta.</li>
-    </ul>
-    <p>La neve recente (almeno 5 cm in 3 giorni) non cambia il segno: è un'informazione in più.</p>`],
-  ['modelli', 'Accordo tra i modelli', '', `
-    <p>Ogni regola viene controllata su ogni modello meteo. Se la vede almeno metà dei modelli il segnale è sicuro; se la vede almeno un quarto è "possibile". Un pericolo solo possibile dà ${sg('avvisi')} invece di ${sg('chiusa')}.</p>`],
+    <p>Senza pericoli il giorno è ${sg('aperta')} se il meteo è buono per uscire, altrimenti ${sg('meteo')}. Servono sole (nuvole sotto il 40%), vento in quota sotto 30 km/h e zero termico sotto la quota.</p>`],
+  ['modelli', 'Modelli d’accordo', '', `
+    <p>Per neve, vento e pioggia usiamo il valore su cui i modelli meteo sono d'accordo: mettiamo i modelli in fila, togliamo quelli lontani dal gruppo (più di 15 km/h di vento, più di metà della neve o della pioggia) e facciamo la media degli altri. Un modello che prevede da solo un valore molto diverso non conta. Se i modelli si dividono a metà, per prudenza conta il gruppo più alto.</p>`],
 ];
 const windowHelp = () => `<div class="win-help">
-  <p>Ogni giorno, alla quota del posto, controlliamo i fattori qui sotto. Il giorno prende il segno più grave: ${sg('chiusa')} pericolo, ${sg('avvisi')} attenzione; senza segnali ${sg('aperta')} se il meteo è buono, ${sg('meteo')} se non lo è. Il bollettino valanghe, quando c'è, ha l'ultima parola. Le regole valgono per pendii ripidi, sopra 30°: su pendii poco ripidi il pericolo è più basso. Tocca un fattore per la spiegazione.</p>
+  <p>Per oggi, domani e dopodomani, alla quota del posto, controlliamo i pericoli qui sotto. Ogni pericolo trovato è una riga con il suo segno; il giorno prende il più grave: ${sg('chiusa')} pericolo, ${sg('avvisi')} attenzione. Senza pericoli ${sg('aperta')} se il meteo è buono, ${sg('meteo')} se non lo è. Più in là la previsione è troppo incerta per giudicare il pericolo. Le regole valgono per pendii ripidi, sopra 30°: su pendii poco ripidi il pericolo è più basso. Tocca un fattore per la spiegazione.</p>
   <div class="help-list">${HELP_FACTORS.map(([id, name, signs, body]) => `<details class="help-item" data-open-key="help|${id}" ${openDays.has(`help|${id}`) ? 'open' : ''}>
     <summary><span class="help-name">${name}</span><span class="help-signs">${signs}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
     <div class="help-body">${body}</div></details>`).join('')}</div>
-  <p class="muted">Fonti: SLF ("Achtung Lawinen!"), EAWS (problemi valanghivi). Il peso della neve di 2 giorni fa è una nostra semplificazione.</p>
+  <p class="muted">Fonti: SLF ("Achtung Lawinen!"), EAWS (problemi valanghivi). Il peso della neve di 2 giorni fa e il rosso da 40 cm con vento debole sono nostre scelte.</p>
 </div>`;
+
+// Segno di una riga dell'elenco dei pericoli.
+const SIG_MARK = { chiusa: 'chiusa', avviso: 'avvisi', info: 'info' };
+const SIG_ICON = { snow: 'snow', wind: 'wind', rain: 'rain', warm: 'freezing', sun: 'sun' };
+const SIG_LABEL = { snow: 'neve fresca', wind: 'vento', rain: 'pioggia', warm: 'notte senza gelo', sun: 'primo sole' };
 
 function windowSection(place, band, selDay = null) {
   const s = state.forecast?.byPlace[place.id]?.[band];
@@ -272,37 +264,34 @@ function windowSection(place, band, selDay = null) {
   const ws = windowsFor(place, band);
   const mine = placeAspects(place.id);
   const items = s.days
+    .slice(0, ws.filter(Boolean).length)
     .map((d, i) => {
       const w = ws[i];
-      const conds = w.conditions
-        .map((c) => `<li class="${c.ok ? 'ok' : 'ko'}${c.bonus ? ' bonus' : ''}">${c.ok ? '✓' : c.bonus ? '·' : '✗'} ${esc(c.label)} <span class="muted">${esc(c.text)}</span></li>`)
+      // Chiuso: segno e icone dei pericoli. Aperto: una riga per pericolo, rosa e meteo in piccolo.
+      const chips = w.signals
+        .filter((x) => x.level !== 'info')
+        .map((x) => `<span class="sig-chip sig-${x.icon}${x.level === 'chiusa' ? ' hot' : ''}">${icon(SIG_ICON[x.icon], SIG_LABEL[x.icon])}${esc(x.value)}</span>`)
         .join('');
-      const sigs = w.signals
-        .map(
-          (x) =>
-            `<li class="sig sig-${x.level}">${x.level === 'chiusa' ? '⛔' : x.level === 'info' ? 'ℹ' : '⚠'} ${
-              x.certainty === 'possibile' ? '<b>possibile</b>: ' : ''
-            }${esc(x.text)} <span class="muted">(${esc(x.source)})</span></li>`,
-        )
-        .join('');
-      const rose = w.loaded.length
-        ? `<div class="win-rose">${aspectRose(w.loaded, mine)}<span class="muted">${
-            w.slabSource === 'bollettino' ? 'dal bollettino' : 'stima dal vento in quota'
-          }</span></div>`
+      const why = !chips && w.status === 'meteo'
+        ? w.conditions.filter((c) => !c.ok).map((c) => ({ sun: 'nuvoloso', calm: 'ventoso', freezing: 'zero termico alto' })[c.id]).join(', ')
         : '';
-      // Una riga per giorno: si apre per vedere condizioni e segnali.
-      const main = w.signals.find((x) => x.level === 'chiusa') || w.signals.find((x) => x.level === 'avviso' || x.level === 'versanti');
-      const why = w.status === 'meteo'
-        ? w.conditions.filter((c) => !c.bonus && !c.ok).map((c) => ({ sun: 'nuvoloso', calm: 'ventoso', freezing: 'zero termico alto' })[c.id] || c.label).join(', ')
-        : main ? `${main.certainty === 'possibile' ? 'possibile ' : ''}${main.source === 'bollettino' ? main.text.replace(/^bollettino: /, '') : main.text.split(':')[0]}`
-        : w.status === 'aperta' && w.noBulletin ? 'senza bollettino' : '';
-      const noBul = w.noBulletin && w.status !== 'nd'
-        ? '<li class="sig sig-info">ℹ nessun bollettino valanghe per questo giorno: qui contano solo meteo e neve</li>'
+      const sigs = w.signals.length
+        ? w.signals
+            .map((x) => {
+              const [head, rest] = x.text.split('|');
+              const mark = x.level === 'info' ? '<span class="sig-none" aria-hidden="true"></span>' : `<span class="win win-${SIG_MARK[x.level]}" aria-hidden="true"></span>`;
+              return `<li class="sig">${mark}<span><b>${esc(head)}</b>${rest ? `: ${esc(rest)}` : ''}</span></li>`;
+            })
+            .join('')
+        : `<li class="sig sig-empty">${w.bulletinMax >= 3 ? `Segno dal bollettino (grado ${w.bulletinMax}). Nessun altro segnale di pericolo` : 'Nessun segnale di pericolo'}</li>`;
+      const meteo = `<li class="sig-meteo">${w.conditions.map((c) => esc(c.text)).join(' · ')}${w.noBulletin ? ' · senza bollettino' : ''}</li>`;
+      const rose = w.loaded.length
+        ? `<div class="win-rose">${aspectRose(w.loaded, mine)}<span class="muted">${w.slabSource === 'bollettino' ? 'dal bollettino' : 'dal vento'}</span></div>`
         : '';
       const open = openDays.has(`${place.id}|${d.date}`);
       return `<li class="win-day" id="win-${d.date}"><details data-open-key="${place.id}|${d.date}" ${open ? 'open' : ''}>
-        <summary><span class="${winClass(w)}" role="img" aria-label="${esc(statusLabel(w))}"></span><span class="cap">${weekday(d.date)} ${dayNum(d.date)}</span><span class="win-why">${esc(why)}</span></summary>
-        <div class="win-body"><div><ul class="win-conds">${conds}</ul>${sigs || noBul ? `<ul class="win-sigs">${sigs}${noBul}</ul>` : ''}</div>${rose}</div>
+        <summary><span class="${winClass(w)}" role="img" aria-label="${esc(statusLabel(w))}"></span><span class="cap">${weekday(d.date)} ${dayNum(d.date)}</span><span class="win-why">${chips}${esc(why)}</span></summary>
+        <div class="win-body"><ul class="win-sigs">${sigs}${meteo}</ul>${rose}</div>
       </details></li>`;
     })
     .join('');
@@ -312,7 +301,7 @@ function windowSection(place, band, selDay = null) {
   // A scomparsa: chiusa di solito; aperta se l'utente l'ha lasciata aperta o se arriva toccando un giorno.
   const open = state.prefs.windowsOpen || (selDay && openDays.has(`${place.id}|${selDay}`));
   return `<details class="windows" data-windows ${open ? 'open' : ''}>
-    <summary><h2>Finestra buona <span class="muted small">a ${place.elevations[band]} m · regole SLF ed EAWS</span></h2>
+    <summary><h2>Prossimi 3 giorni <span class="muted small">a ${place.elevations[band]} m</span></h2>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
     <p class="pw-legend win-how"><span class="pw-k">Come funziona</span>${infoBtn('window')}</p>
     ${state.info.window ? windowHelp() : ''}
@@ -613,7 +602,7 @@ function snowStrip(s) {
   </div>`;
 }
 
-// Scheda unica dei Preferiti: neve accanto al nome (24 h, 1-5, 6-10 giorni) e 7 giorni con cielo, neve, vento e finestra.
+// Scheda unica dei Preferiti: neve accanto al nome (24 h, 1-5, 6-10 giorni) e 7 giorni con cielo, neve, vento e segno dei pericoli (primi 3).
 function forecastCard(place) {
   const band = overviewBand(place);
   const s = state.forecast?.byPlace[place.id]?.[band];
@@ -667,7 +656,7 @@ function renderOverview() {
   if (empty) {
     body = `<div class="empty">
       <p class="empty-title">Nessun posto, per ora</p>
-      <p>Cerca i posti dove vai a sciare: restano qui, con la neve prevista, il vento e la finestra buona. Con la stella li tieni in alto.</p>
+      <p>Cerca i posti dove vai a sciare: restano qui, con la neve prevista, il vento e i pericoli dei prossimi 3 giorni. Con la stella li tieni in alto.</p>
       <a class="btn" href="#/aggiungi">Cerca un posto</a>
       <a class="btn ghost" href="#/trasferisci">Li ho già su un altro dispositivo</a>
     </div>`;
@@ -692,9 +681,9 @@ function renderOverview() {
     </div>`}
     <details class="explain">
       <summary>Come leggere</summary>
-      <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e finestra buona. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
+      <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e, per i prossimi 3 giorni, il segno dei pericoli. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
       <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dal 6° giorno restano solo ECMWF e GFS.</p>
-      <p>Finestra buona: <span class="win win-aperta legend"></span> sì · <span class="win win-aperta win-nobul legend"></span> sì, ma senza bollettino · <span class="win win-avvisi legend"></span> avvisi · <span class="win win-chiusa legend"></span> chiusa · <span class="win win-meteo legend"></span> meteo non buono. Un avviso conta più del meteo.</p>
+      <p>Segno dei prossimi 3 giorni: <span class="win win-chiusa legend"></span> pericolo · <span class="win win-avvisi legend"></span> attenzione · <span class="win win-aperta legend"></span> nessun pericolo, meteo buono (<span class="win win-aperta win-nobul legend"></span> senza bollettino) · <span class="win win-meteo legend"></span> nessun pericolo, meteo non buono. Un pericolo conta più del meteo.</p>
       <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: in quota (circa 3000 m), km/h e provenienza. Raffiche: vicino al suolo.</p>
     </details>`;
 }
