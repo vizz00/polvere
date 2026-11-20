@@ -195,7 +195,9 @@ function placeMarker(lat, lon) {
 // topografico (curve di livello) e satellite Esri.
 const LAYER_KEY = 'mm.mapLayer3';
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoidml6ejAwIiwiYSI6ImNtd2V3d3R3ZjAxeWwyenIyYnBxd2g0dTEifQ.5a9kSc5frG-Ir-3OlZShAg';
-const DOT = '#2f7de1'; // un solo colore per tutti i pallini (poi i preferiti saranno gialli)
+const DOT = '#2f7de1'; // pallini blu per tutti i posti...
+const FAV_DOT = '#ffd166'; // ...gialli (come la stella) per quelli con la stella
+let favIds = new Set();
 const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
 function baseLayers(L) {
@@ -248,10 +250,16 @@ async function setupMap(center) {
     // Pallini: tutti dello stesso colore. Un tocco sul pallino (o vicino) sceglie quel posto
     // con il SUO nome, senza passare dal nome di frazioni vicine.
     const dots = [];
+    // I posti con la stella sono gialli, un po' più grandi e sopra agli altri.
     const addDot = (item, onPick) => {
-      const dot = L.circleMarker([item.lat, item.lon], { radius: 7, color: '#ffffff', weight: 2, fillColor: DOT, fillOpacity: 0.9 })
-        .bindTooltip(item.name)
+      const fav = favIds.has(item.id);
+      const style = fav
+        ? { radius: 9, color: '#0a1530', weight: 2, fillColor: FAV_DOT, fillOpacity: 1 }
+        : { radius: 7, color: '#ffffff', weight: 2, fillColor: DOT, fillOpacity: 0.9 };
+      const dot = L.circleMarker([item.lat, item.lon], style)
+        .bindTooltip(fav ? `★ ${item.name}` : item.name)
         .addTo(map);
+      if (!fav) dot.bringToBack();
       dot.on('click', (ev) => {
         L.DomEvent.stopPropagation(ev);
         onPick();
@@ -307,7 +315,8 @@ async function setupMap(center) {
  * non si azzerano quando arrivano le previsioni).
  * callbacks: onSaved(place, isNew), onDeleted(id)
  */
-export function renderAddPage(app, params, { onSaved, onDeleted }) {
+export function renderAddPage(app, params, { onSaved, onDeleted, favorites = [] }) {
+  favIds = new Set(favorites);
   const key = location.hash;
   const current = document.getElementById('add-page');
   if (current && current.dataset.key === key) return;
