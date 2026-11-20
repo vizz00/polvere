@@ -1062,7 +1062,7 @@ function renderRoute() {
     case 'posto':
       return renderDetail(r.id, r.params);
     case 'aggiungi':
-      return renderAddPage(app, r.params, { onSaved: placeSaved, onDeleted: placeDeleted });
+      return renderAddPage(app, r.params, { onSaved: placeSaved, onDeleted: placeDeleted, favorites: state.prefs.favorites });
     case 'radar':
       return mountRadar(app, { places: myPlaces() });
     case 'valanghe':
