@@ -26,4 +26,5 @@ export function savePrefs(prefs) {
   } catch {
     /* ignorato */
   }
+  globalThis.dispatchEvent?.(new Event('polvere:salvato'));
 }

@@ -12,6 +12,7 @@ import { avalPlaceBlock, avalPage } from './avalanche-view.js';
 import { evaluateWindows, statusLabel, SECTORS, RULES } from './window.js';
 import { renderSeason } from './season-view.js';
 import { exportLink, readCode, mergeImport, transferPage } from './transfer.js';
+import { syncEnabled, syncStatus, syncNow, requestCode, verifyCode, signOut } from './sync.js';
 
 const app = document.getElementById('app');
 const ptr = document.getElementById('ptr');
@@ -36,6 +37,7 @@ const state = {
   info: { chart: false, powder: false, window: false }, // spiegazioni aperte con il tasto ⓘ
   menu: false, // menù ⋯ della pagina del posto
   reorder: false, // riordino manuale dei preferiti aperto
+  sync: { step: 'email', email: '', msg: '', busy: false }, // accesso per la sincronizzazione
 };
 
 // ---------- utilità ----------
@@ -702,7 +704,9 @@ function renderOverview() {
     ${body}
     ${empty ? '' : `<div class="toolbar end">
       <a class="btn ghost add-place" href="#/aggiungi">+ Cerca un posto</a>
-      <a class="transfer-link" href="#/trasferisci">Porta i posti su un altro dispositivo</a>
+      <a class="transfer-link" href="#/trasferisci">${
+        syncEnabled() && syncStatus() ? 'Posti sincronizzati con il tuo account' : syncEnabled() ? 'Stessi posti su tutti i tuoi dispositivi' : 'Porta i posti su un altro dispositivo'
+      }</a>
     </div>`}
     <details class="explain">
       <summary>Come leggere</summary>
@@ -954,8 +958,61 @@ function renderAvalanche(params) {
 
 // Porta posti e preferiti su un altro dispositivo (js/transfer.js).
 function renderTransfer(params) {
-  app.innerHTML = transferPage({ prefs: state.prefs, code: params.get('d') || '', result: state.transferResult });
+  const sync = syncEnabled() ? { ...state.sync, status: syncStatus() } : null;
+  app.innerHTML = transferPage({ prefs: state.prefs, code: params.get('d') || '', result: state.transferResult, sync });
 }
+
+// ---------- sincronizzazione con l'account (js/sync.js) ----------
+
+function syncApply(prefs) {
+  state.prefs = prefs;
+  savePrefs(prefs);
+  render();
+  refresh(false);
+}
+function runSync() {
+  return syncNow(() => state.prefs, syncApply).then(() => {
+    if (route().tab === 'trasferisci') render();
+  });
+}
+let syncTimer;
+window.addEventListener('polvere:salvato', () => {
+  if (!syncEnabled() || !syncStatus()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(runSync, 1500);
+});
+
+async function syncStep(fn) {
+  state.sync = { ...state.sync, busy: true, msg: '' };
+  render();
+  try {
+    await fn();
+  } catch (err) {
+    state.sync.msg = navigator.onLine === false ? 'Senza rete: riprova quando c\'è campo.' : err.message;
+  }
+  state.sync.busy = false;
+  render();
+}
+
+app.addEventListener('submit', (e) => {
+  const f = e.target;
+  if (f.matches('[data-sync-email]')) {
+    e.preventDefault();
+    const email = new FormData(f).get('email');
+    syncStep(async () => {
+      state.sync.email = await requestCode(email);
+      state.sync.step = 'code';
+    });
+  } else if (f.matches('[data-sync-code]')) {
+    e.preventDefault();
+    const code = new FormData(f).get('code');
+    syncStep(async () => {
+      await verifyCode(state.sync.email, code);
+      state.sync = { step: 'email', email: state.sync.email };
+      await runSync();
+    });
+  }
+});
 
 function importCode(text) {
   const data = readCode(text);
@@ -1148,6 +1205,16 @@ app.addEventListener('click', (e) => {
   const copy = e.target.closest('[data-transfer-copy], [data-transfer-share]');
   if (copy) return copyCode(copy);
   if (e.target.closest('[data-transfer-import]')) return importCode(app.querySelector('[data-transfer-input]').value);
+  if (e.target.closest('[data-sync-now]')) return syncStep(runSync);
+  if (e.target.closest('[data-sync-back]')) {
+    state.sync = { step: 'email', email: state.sync.email };
+    return render();
+  }
+  if (e.target.closest('[data-sync-out]')) {
+    signOut();
+    state.sync = { step: 'email', email: '', msg: 'Sei uscito. I posti restano su questo dispositivo.' };
+    return render();
+  }
 });
 app.addEventListener('submit', (e) => {
   if (!e.target.matches('[data-aval-archive]')) return;
@@ -1182,10 +1249,12 @@ window.addEventListener('hashchange', () => {
 // Aggiorna quando si torna sull'app dopo un po' (cache di un'ora).
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && !state.loading) refresh(false);
+  if (document.visibilityState === 'visible') runSync();
 });
 
 render();
 refresh(false);
+runSync();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

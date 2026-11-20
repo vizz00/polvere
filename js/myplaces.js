@@ -22,6 +22,8 @@ function write() {
   } catch {
     /* spazio pieno o navigazione privata */
   }
+  // La sincronizzazione (js/sync.js) ascolta questo evento per mandare le modifiche.
+  globalThis.dispatchEvent?.(new Event('polvere:salvato'));
 }
 
 // Le zone fuori dalle 4 iniziali ricevono un link generico ai bollettini europei.
@@ -123,6 +125,24 @@ export function importPlaces(list) {
   }
   if (added) write();
   return added;
+}
+
+/**
+ * Sincronizzazione: i posti aggiunti diventano quelli arrivati (si tolgono quelli che non ci sono più).
+ * Le copie modificate dei posti predefiniti restano solo su questo dispositivo.
+ */
+export function replacePlaces(list) {
+  const ids = new Set(list.map((p) => p.id));
+  for (const p of PLACES.filter((q) => q.custom && !q.override && !ids.has(q.id))) PLACES.splice(PLACES.indexOf(p), 1);
+  for (const p of list) {
+    const existing = PLACES.find((q) => q.id === p.id);
+    if (existing && (!existing.custom || existing.override)) continue;
+    const place = { ...p, custom: true };
+    ensureRegion(place);
+    if (existing) PLACES.splice(PLACES.indexOf(existing), 1, place);
+    else PLACES.push(place);
+  }
+  write();
 }
 
 // Avvio: carica i posti salvati.

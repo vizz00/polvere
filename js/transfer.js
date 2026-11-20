@@ -44,11 +44,16 @@ function fromBase64Url(code) {
 }
 
 /** Il codice da copiare: un link all'app che porta con sé i dati. */
-export function exportLink(prefs) {
-  const places = PLACES.filter((p) => p.custom && !p.temp).map((p) =>
+/** I dati da portare altrove: posti aggiunti (non le copie modificate dei predefiniti), elenco, stelle, versanti. */
+export function exportData(prefs) {
+  const places = PLACES.filter((p) => p.custom && !p.temp && !p.override).map((p) =>
     Object.fromEntries(PLACE_FIELDS.filter((k) => p[k] !== undefined).map((k) => [k, p[k]]))
   );
-  const data = { v: 1, places, list: prefs.places, favorites: prefs.favorites, aspects: prefs.aspects || {} };
+  return { v: 1, places, list: prefs.places, favorites: prefs.favorites, aspects: prefs.aspects || {} };
+}
+
+export function exportLink(prefs) {
+  const data = exportData(prefs);
   const base = location.href.split('#')[0];
   return `${base}#/trasferisci?d=${toBase64Url(JSON.stringify(data))}`;
 }
@@ -61,7 +66,15 @@ export function readCode(text) {
   const code = m ? m[1] : raw;
   if (!/^[A-Za-z0-9_-]+$/.test(code)) return null;
   try {
-    const data = JSON.parse(fromBase64Url(code));
+    return cleanData(JSON.parse(fromBase64Url(code)));
+  } catch {
+    return null;
+  }
+}
+
+/** Controlla dati arrivati da fuori (codice o sincronizzazione): tiene solo campi noti e valori sensati. */
+export function cleanData(data) {
+  try {
     if (data?.v !== 1 || !Array.isArray(data.places) || !Array.isArray(data.favorites)) return null;
     // Il codice può arrivare da chiunque: si tengono solo i campi noti e con valori sensati,
     // così un link fatto apposta non può infilare pezzi di pagina nell'app.
@@ -101,7 +114,56 @@ export function mergeImport(data, prefs) {
   };
 }
 
-export function transferPage({ prefs, code, result }) {
+/** Sincronizzazione automatica con l'account (solo se attiva, vedi js/sync.js). */
+function syncSection(sync) {
+  if (!sync) return '';
+  const ago = (ts) => {
+    const min = Math.round((Date.now() - ts) / 60000);
+    return min < 1 ? 'adesso' : min < 60 ? `${min} min fa` : new Date(ts).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+  const msg = sync.msg ? `<p class="muted small" role="status">${esc(sync.msg)}</p>` : '';
+  if (sync.status) {
+    const st = sync.status;
+    const line = st.error
+      ? st.error === 'offline' ? 'Senza rete: sincronizzo appena torna.' : `Non riesco a sincronizzare (${esc(st.error)}). Riprovo da solo.`
+      : st.at ? `Ultima sincronizzazione: ${ago(st.at)}.` : 'Sincronizzo…';
+    return `<section class="transfer sync">
+      <h2>Sincronizzati con il tuo account</h2>
+      <p>${esc(st.email)}</p>
+      <p class="muted small">${line} Ogni posto che aggiungi, togli o metti con la stella arriva da solo sugli altri dispositivi collegati.</p>
+      ${msg}
+      <div class="transfer-actions">
+        <button type="button" class="btn" data-sync-now ${sync.busy ? 'disabled' : ''}>Sincronizza ora</button>
+        <button type="button" class="btn ghost" data-sync-out>Esci</button>
+      </div>
+    </section>`;
+  }
+  if (sync.step === 'code') {
+    return `<section class="transfer sync">
+      <h2>Controlla l'email</h2>
+      <p class="muted small">Ti ho mandato un codice a ${esc(sync.email)}. Scrivilo qui (sull'iPhone dentro l'app aperta dalla schermata Home).</p>
+      ${msg}
+      <form data-sync-code class="sync-form">
+        <label for="sync-code" class="sr-only">Codice</label>
+        <input id="sync-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required>
+        <button type="submit" class="btn" ${sync.busy ? 'disabled' : ''}>Entra</button>
+      </form>
+      <p class="small"><button type="button" class="linklike" data-sync-back>Cambia email</button></p>
+    </section>`;
+  }
+  return `<section class="transfer sync">
+    <h2>Sempre uguali, da soli</h2>
+    <p class="muted small">Entra con la tua email su ogni dispositivo: i posti e le stelle restano sincronizzati, senza copiare niente. Nessuna password: ti arriva un codice.</p>
+    ${msg}
+    <form data-sync-email class="sync-form">
+      <label for="sync-email" class="sr-only">Email</label>
+      <input id="sync-email" name="email" type="email" autocomplete="email" placeholder="nome@email.it" value="${esc(sync.email || '')}" required>
+      <button type="submit" class="btn" ${sync.busy ? 'disabled' : ''}>Mandami il codice</button>
+    </form>
+  </section>`;
+}
+
+export function transferPage({ prefs, code, result, sync }) {
   const nPlaces = prefs.places.length;
   const nFavs = prefs.favorites.length;
   const done = result
@@ -116,9 +178,11 @@ export function transferPage({ prefs, code, result }) {
   const bad = code && !result && !readCode(code)
     ? '<div class="notice error" role="alert"><p>Il codice non è valido: copialo di nuovo per intero dall\'altro dispositivo.</p></div>'
     : '';
-  return `<h1 class="page-title">Altro dispositivo</h1>
-    <p class="muted">Per avere gli stessi posti sul Mac e sull'iPhone: copia il codice su un dispositivo e incollalo sull'altro.</p>
+  return `<h1 class="page-title">${sync ? 'I tuoi dispositivi' : 'Altro dispositivo'}</h1>
+    ${sync ? '' : '<p class="muted">Per avere gli stessi posti sul Mac e sull\'iPhone: copia il codice su un dispositivo e incollalo sull\'altro.</p>'}
     ${done}${bad}
+    ${syncSection(sync)}
+    ${sync ? '<h2 class="transfer-or">Oppure, una volta sola, con un codice</h2>' : ''}
     <section class="transfer">
       <h2>1 · Copia da questo dispositivo</h2>
       <p>${nPlaces} ${nPlaces === 1 ? 'posto' : 'posti'}${nFavs ? `, ${nFavs} con la stella` : ''}.</p>
