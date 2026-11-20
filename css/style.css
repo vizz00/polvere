@@ -462,6 +462,8 @@ body.radar-mode main {
 .chart .ax-day.we, .chart .ax-num.we { fill: var(--text); font-weight: 700; }
 .chart .grid { stroke: var(--line); stroke-width: .6; stroke-dasharray: 2 3; }
 .chart .grid-day { stroke: var(--line); stroke-width: .6; }
+.chart .grid-hour { stroke: var(--line); stroke-width: .4; stroke-dasharray: 2 3; opacity: .7; }
+.chart .ax-hour { fill: var(--muted); font-size: 7px; opacity: .8; }
 .chart .ref { stroke: #e8eefc; stroke-width: 1.2; }
 .chart .ref-l { fill: #e8eefc; font-weight: 700; }
 .chart .ln-model { fill: none; stroke: #6f8dff; stroke-opacity: .45; stroke-width: 1; }

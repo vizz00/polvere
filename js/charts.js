@@ -58,12 +58,17 @@ function path(values, x, y) {
   return d;
 }
 
-// Righe verticali a mezzanotte ed etichette dei giorni a mezzogiorno.
+// Righe verticali a mezzanotte, righe leggere alle 6, 12 e 18 con l'ora scritta in basso,
+// etichette dei giorni a mezzogiorno sotto l'asse.
 function dayAxis(times, x, top, bottom, labels = true) {
   let out = '';
   times.forEach((t, i) => {
     const hh = t.slice(11, 13);
     if (hh === '00') out += `<line class="grid-day" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${bottom}"/>`;
+    if (hh === '06' || hh === '12' || hh === '18') {
+      out += `<line class="grid-hour" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${bottom}"/>`;
+      if (labels) out += `<text class="ax-hour" x="${x(i)}" y="${bottom - 3}" text-anchor="middle">${Number(hh)}</text>`;
+    }
     if (labels && hh === '12') {
       const d = new Date(`${t.slice(0, 10)}T12:00:00`);
       const we = d.getDay() === 0 || d.getDay() === 6;
