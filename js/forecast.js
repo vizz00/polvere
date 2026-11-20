@@ -1,14 +1,15 @@
-// Scarica le previsioni Open-Meteo per tutti i posti e tutte le quote
-// con UNA sola chiamata (Open-Meteo accetta liste di coordinate).
+// Scarica le previsioni Open-Meteo per tutti i posti con UNA sola chiamata (Open-Meteo accetta
+// liste di coordinate). Per l'elenco basta una quota per posto (metà, o quella unica):
+// valle e cima si scaricano solo quando si apre il posto (loadDetail), così i dati sono un terzo.
 import { MODELS, HOURLY_VARS, summarizePoint, totalRange, pointNow, chartSeries } from './snow.js';
-import { BANDS } from './places.js';
 import { dailySlr, slrVars, SLR_LEVELS } from './slr.js';
 
 const API = 'https://api.open-meteo.com/v1/forecast';
 // Si salva il riassunto per giorno (non la risposta grezza, 3 volte più grande):
 // così ci stanno molti posti nello spazio del browser.
-const CACHE_KEY = 'mm.forecast.v3';
+const CACHE_KEY = 'mm.forecast.v4';
 try {
+  localStorage.removeItem('mm.forecast.v3'); // tre quote per posto
   localStorage.removeItem('mm.forecast.v1'); // vecchio formato grezzo
   localStorage.removeItem('mm.forecast.v2'); // vento sempre a 3000 m
 } catch {
@@ -21,18 +22,21 @@ export const DETAIL_DAYS = 10; // dettaglio del posto: grafici a 10 giorni (più
 // (neve fresca degli ultimi 3 giorni, giorni secchi prima della nevicata, neve soffice degli ultimi 7).
 export const PAST_DAYS = 8;
 
+/** Quota usata nell'elenco Località: metà, o l'unica quota dei posti "casa". */
+export const overviewBand = (place) => (place.single ? 'valle' : 'meta');
+
+// ridge: quota della cima, per il vento che forma gli accumuli in cresta.
+const ridgeOf = (place) => (place.single ? place.elevations.valle : place.elevations.cima);
+
 function buildPoints(places) {
-  const points = [];
   // Sempre nello stesso ordine (per id): mettere una stella o riordinare i posti non cambia
   // la richiesta, così la copia salvata resta valida (anche senza rete).
-  for (const place of [...places].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    for (const band of BANDS) {
-      // ridge: quota della cima, per il vento che forma gli accumuli in cresta.
-      const ridge = place.single ? place.elevations.valle : place.elevations.cima;
-      points.push({ placeId: place.id, band: band.id, lat: place.lat, lon: place.lon, elev: place.elevations[band.id], ridge });
-    }
-  }
-  return points;
+  return [...places]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((place) => {
+      const band = overviewBand(place);
+      return { placeId: place.id, band, lat: place.lat, lon: place.lon, elev: place.elevations[band], ridge: ridgeOf(place) };
+    });
 }
 
 // Variabili di riserva: se Open-Meteo va in errore con tutti i livelli del vento
@@ -196,15 +200,57 @@ function assemble(points, points2, fetchedAt, stale) {
 const DETAIL_KEY = 'mm.detail.v1';
 const detailMemo = new Map();
 
-/** Serie orarie per i grafici del posto alla quota scelta (cache di un'ora, solo l'ultimo posto). */
+// Riassunti delle quote scaricate aprendo un posto (valle e cima): pochi KB l'uno,
+// se ne tengono gli ultimi BAND_KEEP così senza rete si rivedono i posti aperti di recente.
+const BAND_KEY = 'mm.bands.v1';
+const BAND_KEEP = 12;
+
+let bandsMemo = null; // letto una volta sola: la pagina del posto lo chiede a ogni disegno
+function readBands() {
+  if (bandsMemo) return bandsMemo;
+  try {
+    const b = JSON.parse(localStorage.getItem(BAND_KEY) || '[]');
+    bandsMemo = Array.isArray(b) ? b : [];
+  } catch {
+    bandsMemo = [];
+  }
+  return bandsMemo;
+}
+
+function saveBand(key, fetchedAt, data) {
+  try {
+    const list = [{ key, fetchedAt, data }, ...readBands().filter((e) => e.key !== key)].slice(0, BAND_KEEP);
+    bandsMemo = list;
+    localStorage.setItem(BAND_KEY, JSON.stringify(list));
+  } catch {
+    /* spazio pieno: resta solo in memoria */
+  }
+}
+
+/** Riassunto salvato di una quota non dell'elenco (null se non c'è), di qualsiasi età. */
+export function cachedBand(place, band) {
+  const key = pointKey({ placeId: place.id, band, elev: place.elevations[band], ridge: ridgeOf(place) });
+  const e = readBands().find((x) => x.key === key);
+  return e ? { fetchedAt: e.fetchedAt, summary: splitPast(e.data) } : null;
+}
+
+/**
+ * Serie orarie per i grafici del posto alla quota scelta (cache di un'ora, solo l'ultimo posto).
+ * Se la quota non è quella dell'elenco (valle o cima) scarica anche i giorni passati e
+ * restituisce `summary`, il riassunto per giorno che l'elenco ha solo per la quota di metà.
+ */
 export async function loadDetail(place, band, { force = false } = {}) {
   const elev = place.elevations[band];
   const point = { lat: place.lat, lon: place.lon, elev };
-  // I grafici partono da adesso: i giorni passati non servono (download più leggero).
-  const url = buildUrl([point], DETAIL_DAYS, HOURLY_VARS, 0);
+  // I grafici partono da adesso: i giorni passati servono solo per il riassunto di valle e cima.
+  const extra = band !== overviewBand(place);
+  const pastDays = extra ? PAST_DAYS : 0;
+  const url = buildUrl([point], DETAIL_DAYS, HOURLY_VARS, pastDays);
   let raw = null;
+  let fetchedAt = null;
+  let fresh = false;
   const memo = detailMemo.get(url);
-  if (!force && memo && Date.now() - memo.fetchedAt < MAX_AGE_MS) raw = memo.data;
+  if (!force && memo && Date.now() - memo.fetchedAt < MAX_AGE_MS) ({ data: raw, fetchedAt } = memo);
   if (!raw) {
     let stored = null;
     try {
@@ -212,24 +258,34 @@ export async function loadDetail(place, band, { force = false } = {}) {
     } catch {
       /* ignorato */
     }
-    if (!force && stored?.key === url && Date.now() - stored.fetchedAt < MAX_AGE_MS) raw = stored.data;
+    if (!force && stored?.key === url && Date.now() - stored.fetchedAt < MAX_AGE_MS) ({ data: raw, fetchedAt } = stored);
     else {
       try {
-        raw = await fetchForecast([point], DETAIL_DAYS, 0);
-        detailMemo.set(url, { fetchedAt: Date.now(), data: raw });
+        raw = await fetchForecast([point], DETAIL_DAYS, pastDays);
+        fetchedAt = Date.now();
+        fresh = true;
+        detailMemo.set(url, { fetchedAt, data: raw });
         try {
-          localStorage.setItem(DETAIL_KEY, JSON.stringify({ key: url, fetchedAt: Date.now(), data: raw }));
+          localStorage.setItem(DETAIL_KEY, JSON.stringify({ key: url, fetchedAt, data: raw }));
         } catch {
           /* spazio pieno: resta solo in memoria */
         }
       } catch (err) {
         if (stored?.key !== url) throw err;
-        raw = stored.data;
+        ({ data: raw, fetchedAt } = stored);
       }
     }
   }
   const one = Array.isArray(raw) ? raw[0] : raw;
-  return { elev, series: chartSeries(one, elev, MODELS) };
+  const out = { elev, series: chartSeries(one, elev, MODELS) };
+  if (extra) {
+    const ridge = ridgeOf(place);
+    const compact = compactPoint(one, elev, ridge);
+    if (fresh) saveBand(pointKey({ placeId: place.id, band, elev, ridge }), fetchedAt, compact);
+    out.summary = splitPast(compact);
+    out.fetchedAt = fetchedAt;
+  }
+  return out;
 }
 
 // ---------- rapporto neve/acqua (metodo del PDF): profili in quota, solo per il posto aperto ----------

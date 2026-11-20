@@ -1,6 +1,6 @@
 import { PLACES, BANDS, REGIONS, externalLinks, webcamUrl, WEBCAM_ICON } from './places.js';
 import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
-import { loadForecast, loadDetail, loadSlr, cachedForecast } from './forecast.js';
+import { loadForecast, loadDetail, loadSlr, cachedForecast, cachedBand, overviewBand } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
 import { powderDays } from './powder.js';
 import { loadPrefs, savePrefs } from './storage.js';
@@ -155,8 +155,18 @@ function bulletinFor(placeId) {
   return (date) => (!entry ? null : date === a.today ? entry.today : date === a.tomorrow ? entry.tomorrow : null);
 }
 
+// Riassunto per giorno di un posto a una quota. La quota dell'elenco arriva con la previsione
+// di tutti i posti; valle e cima solo aprendo il posto (insieme ai grafici), e intanto
+// si usa l'ultima copia salvata di quella quota, se c'è.
+function summaryOf(place, band) {
+  if (band === overviewBand(place)) return state.forecast?.byPlace[place.id]?.[band];
+  const d = state.detail;
+  if (d?.key === `${place.id}|${band}|${place.elevations[band]}` && d.data?.summary) return d.data.summary;
+  return cachedBand(place, band)?.summary;
+}
+
 function windowsFor(place, band) {
-  const s = state.forecast?.byPlace[place.id]?.[band];
+  const s = summaryOf(place, band);
   if (!s) return null;
   return evaluateWindows(s, place.elevations[band], { aspects: placeAspects(place.id), bulletinFor: bulletinFor(place.id) });
 }
@@ -259,7 +269,7 @@ const SIG_ICON = { snow: 'snow', wind: 'wind', rain: 'rain', warm: 'freezing', s
 const SIG_LABEL = { snow: 'neve fresca', wind: 'vento', rain: 'pioggia', warm: 'notte senza gelo', sun: 'primo sole' };
 
 function windowSection(place, band, selDay = null) {
-  const s = state.forecast?.byPlace[place.id]?.[band];
+  const s = summaryOf(place, band);
   if (!s) return '';
   const ws = windowsFor(place, band);
   const mine = placeAspects(place.id);
@@ -433,7 +443,6 @@ function bandSwitch(place) {
 // ---------- panoramica (preferiti) ----------
 
 // Nei preferiti si usa sempre la quota di metà (o l'unica quota); la scelta resta nella pagina del posto.
-const overviewBand = (place) => (place.single ? 'valle' : 'meta');
 
 const sumMedian = (days, from, to) => {
   const r = totalRange(days.slice(from, to));
@@ -519,7 +528,7 @@ const POWDER_SHORT = { ottima: 'Ottima', buona: 'Buona', discreta: 'Discreta', n
 // Nel dettaglio (detail) usa la quota scelta e aggiunge la qualità della polvere.
 function snowCard(place, { detail = false } = {}) {
   const band = detail && !place.single ? state.prefs.band : overviewBand(place);
-  const s = state.forecast?.byPlace[place.id]?.[band];
+  const s = summaryOf(place, band);
   if (!s) return `<article class="place">${placeHead(place, band)}<p class="muted pad">Dati non disponibili</p></article>`;
   const t = snowTotals(s);
   const days = s.days.slice(0, 10);
@@ -620,7 +629,7 @@ function snowStrip(s) {
 // Scheda unica dei Preferiti: neve accanto al nome (24 h, 1-5, 6-10 giorni) e 7 giorni con cielo, neve, vento e segno dei pericoli (primi 3).
 function forecastCard(place) {
   const band = overviewBand(place);
-  const s = state.forecast?.byPlace[place.id]?.[band];
+  const s = summaryOf(place, band);
   if (!s) return `<article class="place">${placeHead(place)}<p class="muted pad">Dati non disponibili</p></article>`;
   const wins = windowsFor(place, band) || [];
   const cols = s.days
@@ -729,7 +738,9 @@ const WIND_BANDS = [
 
 async function ensureDetail(place, band, force = false) {
   const key = `${place.id}|${band}|${place.elevations[band]}`;
-  if (!force && state.detail?.key === key && (state.detail.data || state.detail.loading)) return;
+  // Anche dopo un errore non si riprova da soli (senza rete ogni disegno ripartirebbe):
+  // si riprova trascinando giù o cambiando quota.
+  if (!force && state.detail?.key === key && (state.detail.data || state.detail.loading || state.detail.error)) return;
   // Aggiornando si tengono i grafici vecchi a schermo finché arrivano i nuovi.
   const old = state.detail?.key === key ? state.detail.data : null;
   state.detail = { key, loading: !old, data: old, error: null };
@@ -881,7 +892,7 @@ function renderDetail(id, params) {
   const sel0 = params.get('giorno');
   if (sel0 && state.scrolledDay !== location.hash) openDays.add(`${place.id}|${sel0}`);
   ensureDetail(place, band);
-  const s = state.forecast?.byPlace[place.id]?.[band];
+  const s = summaryOf(place, band);
   const card = s ? snowCard(place, { detail: true }) : '';
 
   app.innerHTML = `
