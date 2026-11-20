@@ -6,7 +6,7 @@ const DEFAULTS = {
   // places: tutti i miei posti (cercati o aggiunti); alla prima apertura è vuoto. Lo crea js/app.js.
   band: 'meta',
   aspects: {}, // versanti scelti per posto: { [id]: ['N', 'NE'] }
-  sort: 'mio', // 'mio' | 'd1_5' | 'd6_10'
+  sort: 'mio', // 'mio' | 'last24' | 'd1_5' | 'd6_10' | 'powder'
   chart: 'snowTotal', // grafico scelto nel dettaglio
   chartModel: '', // '' = tutti (mediana), altrimenti id del modello
   windowsOpen: false, // sezione Prossimi 3 giorni aperta nella pagina del posto
