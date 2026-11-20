@@ -25,6 +25,7 @@ const SHELL = [
   'js/transfer.js',
   'js/season.js',
   'js/season-view.js',
+  'js/slr.js',
   'js/snow.js',
   'js/storage.js',
   'js/window.js',

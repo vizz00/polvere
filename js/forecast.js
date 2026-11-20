@@ -2,6 +2,7 @@
 // con UNA sola chiamata (Open-Meteo accetta liste di coordinate).
 import { MODELS, HOURLY_VARS, summarizePoint, totalRange, pointNow, chartSeries } from './snow.js';
 import { BANDS } from './places.js';
+import { dailySlr, slrVars, SLR_LEVELS } from './slr.js';
 
 const API = 'https://api.open-meteo.com/v1/forecast';
 // Si salva il riassunto per giorno (non la risposta grezza, 3 volte più grande):
@@ -229,4 +230,57 @@ export async function loadDetail(place, band, { force = false } = {}) {
   }
   const one = Array.isArray(raw) ? raw[0] : raw;
   return { elev, series: chartSeries(one, elev, MODELS) };
+}
+
+// ---------- rapporto neve/acqua (metodo del PDF): profili in quota, solo per il posto aperto ----------
+
+// MeteoSwiss CH2 non dà i livelli in quota, quindi resta fuori.
+const SLR_MODELS = MODELS.filter((m) => m.id !== 'meteoswiss_icon_ch2').map((m) => m.id);
+const SLR_KEY = 'mm.slr.v1';
+
+function slrUrl(point, levels) {
+  const q = new URLSearchParams({
+    latitude: String(point.lat),
+    longitude: String(point.lon),
+    elevation: String(point.elev),
+    hourly: slrVars(levels).join(','),
+    models: SLR_MODELS.join(','),
+    forecast_days: String(DETAIL_DAYS),
+    timezone: 'Europe/Rome',
+  });
+  return `${API}?${q}`;
+}
+
+/**
+ * { 'AAAA-MM-GG': rapporto } per il posto alla quota scelta (cache di un'ora).
+ * Se Open-Meteo non risponde restituisce {}: l'app usa la stima semplice.
+ */
+export async function loadSlr(place, band, { force = false } = {}) {
+  const point = { lat: place.lat, lon: place.lon, elev: place.elevations[band] };
+  const key = slrUrl(point, SLR_LEVELS);
+  try {
+    const c = JSON.parse(localStorage.getItem(SLR_KEY) || 'null');
+    if (!force && c?.key === key && Date.now() - c.fetchedAt < MAX_AGE_MS) return c.data;
+  } catch {
+    /* ignorato */
+  }
+  // Se va in errore con tutti i livelli si riprova senza 850 e 400 hPa.
+  for (const levels of [SLR_LEVELS, [700, 600, 500]]) {
+    try {
+      const res = await fetch(slrUrl(point, levels));
+      if (!res.ok) continue;
+      const raw = await res.json();
+      if (raw?.error) continue;
+      const data = dailySlr(Array.isArray(raw) ? raw[0] : raw, point.elev, SLR_MODELS, levels);
+      try {
+        localStorage.setItem(SLR_KEY, JSON.stringify({ key, fetchedAt: Date.now(), data }));
+      } catch {
+        /* spazio pieno */
+      }
+      return data;
+    } catch {
+      /* si riprova */
+    }
+  }
+  return {};
 }
