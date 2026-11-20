@@ -196,12 +196,20 @@ export function zoneInGeojson(geojson, lat, lon, day = romeDate()) {
   return null;
 }
 
+// Con poco segnale una richiesta può restare appesa: oltre 20 secondi si rinuncia
+// (e si usa l'ultima copia salvata del bollettino).
+function fetchTimeout(url, opts = {}, ms = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 const memo = new Map();
 async function getJson(url) {
   if (!memo.has(url)) {
     memo.set(
       url,
-      fetch(url).then((r) => {
+      fetchTimeout(url).then((r) => {
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
         return r.json();
@@ -315,7 +323,7 @@ export async function loadAvalanche(places, { force = false, day = null } = {}) 
 
 // I bollettini si aggiornano: niente memo tra un caricamento e l'altro.
 async function getJsonFresh(url) {
-  const r = await fetch(url, { cache: 'no-cache' });
+  const r = await fetchTimeout(url, { cache: 'no-cache' });
   if (r.status === 404 || r.status === 403) return null; // nessun bollettino per quel giorno
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
   return r.json();

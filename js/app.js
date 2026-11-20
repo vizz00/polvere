@@ -1,6 +1,6 @@
 import { PLACES, BANDS, REGIONS, externalLinks, webcamUrl, WEBCAM_ICON } from './places.js';
 import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
-import { loadForecast, loadDetail } from './forecast.js';
+import { loadForecast, loadDetail, cachedForecast } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
 import { powderDays } from './powder.js';
 import { loadPrefs, savePrefs } from './storage.js';
@@ -339,7 +339,12 @@ async function loadAvalancheArchive(day) {
   render();
 }
 
+// Numero dell'ultimo aggiornamento: se ne partono due insieme (es. posto aggiunto e ritorno sull'app)
+// vale solo la risposta del più recente, non quella che arriva per ultima.
+let refreshSeq = 0;
+
 async function refresh(force = false) {
+  const seq = ++refreshSeq;
   refreshAvalanche(force);
   const r = route();
   if (force && r.tab === 'posto') {
@@ -350,18 +355,27 @@ async function refresh(force = false) {
   state.error = null;
   ptr.classList.add('spinning');
   render();
+  const mine = myPlaces();
+  // All'apertura si mostra subito l'ultima previsione salvata (con la sua età) mentre arriva quella nuova.
+  if (!state.forecast && mine.length) {
+    state.forecast = cachedForecast(mine);
+    if (state.forecast) render();
+  }
+  let fc = null;
+  let failed = false;
   try {
-    const mine = myPlaces();
-    state.forecast = mine.length ? await loadForecast(mine, { force }) : { byPlace: {}, fetchedAt: Date.now() };
+    fc = mine.length ? await loadForecast(mine, { force }) : { byPlace: {}, fetchedAt: Date.now() };
   } catch (err) {
     console.error(err);
-    state.error = 'Non riesco a scaricare le previsioni. Controlla la connessione e riprova.';
-  } finally {
-    state.loading = false;
-    ptr.classList.remove('spinning');
-    setPull(0);
-    render();
+    failed = true;
   }
+  if (seq !== refreshSeq) return; // nel frattempo è partito un aggiornamento più recente
+  if (failed) state.error = 'Non riesco a scaricare le previsioni. Controlla la connessione e riprova.';
+  else state.forecast = fc;
+  state.loading = false;
+  ptr.classList.remove('spinning');
+  setPull(0);
+  render();
 }
 
 // Trascina giù dall'inizio della pagina per aggiornare (non sulle mappe).

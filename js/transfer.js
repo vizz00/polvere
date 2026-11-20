@@ -10,6 +10,26 @@ const PLACE_FIELDS = ['id', 'name', 'lat', 'lon', 'elevations', 'region', 'regio
 const esc = (t) =>
   String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+// Id dei posti: lettere minuscole, numeri e trattini (vedi slug in geo.js).
+const validId = (id) => typeof id === 'string' && /^[a-z0-9-]{1,40}$/.test(id);
+const validElev = (v) => Number.isFinite(v) && v >= 0 && v <= 5000;
+function validPlace(p) {
+  return (
+    p &&
+    validId(p.id) &&
+    typeof p.name === 'string' &&
+    p.name.length <= 80 &&
+    Number.isFinite(p.lat) &&
+    Number.isFinite(p.lon) &&
+    Math.abs(p.lat) <= 90 &&
+    Math.abs(p.lon) <= 180 &&
+    p.elevations &&
+    ['valle', 'meta', 'cima'].every((b) => validElev(p.elevations[b])) &&
+    (p.region == null || (typeof p.region === 'string' && /^[A-Z0-9-]{1,12}$/.test(p.region))) &&
+    (p.regionName == null || (typeof p.regionName === 'string' && p.regionName.length <= 60))
+  );
+}
+
 function toBase64Url(text) {
   const bytes = new TextEncoder().encode(text);
   let bin = '';
@@ -43,11 +63,20 @@ export function readCode(text) {
   try {
     const data = JSON.parse(fromBase64Url(code));
     if (data?.v !== 1 || !Array.isArray(data.places) || !Array.isArray(data.favorites)) return null;
-    data.places = data.places.filter(
-      (p) => p && typeof p.id === 'string' && typeof p.name === 'string' && Number.isFinite(p.lat) && Number.isFinite(p.lon) && p.elevations
+    // Il codice può arrivare da chiunque: si tengono solo i campi noti e con valori sensati,
+    // così un link fatto apposta non può infilare pezzi di pagina nell'app.
+    data.places = data.places.filter(validPlace).map((p) => ({
+      ...Object.fromEntries(PLACE_FIELDS.filter((k) => p[k] !== undefined).map((k) => [k, p[k]])),
+      elevations: { valle: p.elevations.valle, meta: p.elevations.meta, cima: p.elevations.cima },
+    }));
+    data.favorites = data.favorites.filter(validId);
+    data.list = (Array.isArray(data.list) ? data.list : [...data.favorites, ...data.places.map((p) => p.id)]).filter(validId);
+    const SECT = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+    data.aspects = Object.fromEntries(
+      Object.entries(data.aspects && typeof data.aspects === 'object' ? data.aspects : {})
+        .filter(([id, list]) => validId(id) && Array.isArray(list))
+        .map(([id, list]) => [id, list.filter((a) => SECT.includes(a))]),
     );
-    data.favorites = data.favorites.filter((f) => typeof f === 'string');
-    data.list = (Array.isArray(data.list) ? data.list : [...data.favorites, ...data.places.map((p) => p.id)]).filter((f) => typeof f === 'string');
     return data;
   } catch {
     return null;

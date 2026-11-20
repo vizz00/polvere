@@ -22,7 +22,9 @@ export const PAST_DAYS = 8;
 
 function buildPoints(places) {
   const points = [];
-  for (const place of places) {
+  // Sempre nello stesso ordine (per id): mettere una stella o riordinare i posti non cambia
+  // la richiesta, così la copia salvata resta valida (anche senza rete).
+  for (const place of [...places].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     for (const band of BANDS) {
       // ridge: quota della cima, per il vento che forma gli accumuli in cresta.
       const ridge = place.single ? place.elevations.valle : place.elevations.cima;
@@ -40,7 +42,7 @@ const FALLBACK_VARS = [
   HOURLY_VARS.filter((v) => !v.includes('600hPa') && !v.startsWith('wind_speed_10m') && !v.startsWith('wind_direction_10m')),
 ];
 
-export function buildUrl(points, days = FORECAST_DAYS, vars = HOURLY_VARS) {
+export function buildUrl(points, days = FORECAST_DAYS, vars = HOURLY_VARS, pastDays = PAST_DAYS) {
   const q = new URLSearchParams({
     latitude: points.map((p) => p.lat).join(','),
     longitude: points.map((p) => p.lon).join(','),
@@ -48,7 +50,7 @@ export function buildUrl(points, days = FORECAST_DAYS, vars = HOURLY_VARS) {
     hourly: vars.join(','),
     models: MODELS.map((m) => m.id).join(','),
     forecast_days: String(days),
-    past_days: String(PAST_DAYS),
+    past_days: String(pastDays),
     timezone: 'Europe/Rome',
   });
   return `${API}?${q}`;
@@ -63,18 +65,34 @@ function splitPast(point) {
   return { past, days, total: totalRange(days), ...(point.now || {}) };
 }
 
+// Con poco segnale una richiesta può restare appesa a lungo: oltre questo tempo si rinuncia
+// e si usa l'ultima copia salvata.
+const NET_TIMEOUT_MS = 25000;
+
+async function fetchJson(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), NET_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    const raw = await res.json().catch(() => null);
+    // Errore di Open-Meteo (risposta arrivata): si può riprovare con meno variabili.
+    if (!res.ok || raw?.error) throw Object.assign(new Error(`Open-Meteo: ${raw?.reason || res.status}`), { server: true });
+    return raw;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Scarica la previsione; se Open-Meteo risponde con un errore riprova con meno variabili. */
-async function fetchForecast(points, days) {
+async function fetchForecast(points, days, pastDays = PAST_DAYS) {
   let lastErr = null;
   for (const vars of [HOURLY_VARS, ...FALLBACK_VARS]) {
     try {
-      const res = await fetch(buildUrl(points, days, vars));
-      if (!res.ok) throw new Error(`Open-Meteo ha risposto ${res.status}`);
-      const raw = await res.json();
-      if (raw?.error) throw new Error(`Open-Meteo: ${raw.reason}`);
-      return raw;
+      return await fetchJson(buildUrl(points, days, vars, pastDays));
     } catch (err) {
       lastErr = err;
+      // Senza rete (o rete troppo lenta) riprovare non serve: si passa subito alla copia salvata.
+      if (!err.server) break;
     }
   }
   throw lastErr;
@@ -93,9 +111,27 @@ function readCache(key) {
   }
 }
 
-function writeCache(key, data) {
+// Chiave di un punto: serve a ritrovarlo nella copia salvata anche se l'elenco dei posti è cambiato.
+const pointKey = (p) => `${p.placeId}|${p.band}|${p.elev}|${p.ridge}`;
+
+// Copia salvata per i punti richiesti, anche se fatta con un elenco di posti diverso:
+// i posti che non c'erano restano vuoti. Null se non c'è nessun punto in comune.
+function fromAnyCache(points) {
+  let c = null;
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ key, fetchedAt: Date.now(), data }));
+    c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+  if (!c?.points || !Array.isArray(c.data)) return null;
+  const at = new Map(c.points.map((k, i) => [k, c.data[i]]));
+  const data = points.map((p) => at.get(pointKey(p)) ?? null);
+  return data.some(Boolean) ? { fetchedAt: c.fetchedAt, data } : null;
+}
+
+function writeCache(key, data, points) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ key, fetchedAt: Date.now(), points: points.map(pointKey), data }));
   } catch {
     /* spazio pieno o navigazione privata: si va avanti senza cache */
   }
@@ -122,15 +158,30 @@ export async function loadForecast(places, { force = false } = {}) {
       const list = Array.isArray(raw) ? raw : [raw];
       points2 = points.map((p, i) => compactPoint(list[i], p.elev, p.ridge));
       fetchedAt = Date.now();
-      writeCache(url, points2);
+      writeCache(url, points2, points);
     } catch (err) {
-      if (!cached) throw err;
-      points2 = cached.data;
-      fetchedAt = cached.fetchedAt;
+      // Senza rete: l'ultima copia, anche se fatta prima di aggiungere o togliere un posto.
+      const any = cached || fromAnyCache(points);
+      if (!any) throw err;
+      points2 = any.data;
+      fetchedAt = any.fetchedAt;
       stale = true;
     }
   }
+  return assemble(points, points2, fetchedAt, stale);
+}
 
+/**
+ * Ultima previsione salvata, senza rete e di qualsiasi età (null se non c'è).
+ * Serve a mostrare subito qualcosa all'apertura mentre si scarica quella nuova.
+ */
+export function cachedForecast(places) {
+  const points = buildPoints(places);
+  const any = readCache(buildUrl(points)) || fromAnyCache(points);
+  return any ? assemble(points, any.data, any.fetchedAt, false) : null;
+}
+
+function assemble(points, points2, fetchedAt, stale) {
   const byPlace = {};
   points.forEach((p, i) => {
     byPlace[p.placeId] ??= {};
@@ -148,7 +199,8 @@ const detailMemo = new Map();
 export async function loadDetail(place, band, { force = false } = {}) {
   const elev = place.elevations[band];
   const point = { lat: place.lat, lon: place.lon, elev };
-  const url = buildUrl([point], DETAIL_DAYS);
+  // I grafici partono da adesso: i giorni passati non servono (download più leggero).
+  const url = buildUrl([point], DETAIL_DAYS, HOURLY_VARS, 0);
   let raw = null;
   const memo = detailMemo.get(url);
   if (!force && memo && Date.now() - memo.fetchedAt < MAX_AGE_MS) raw = memo.data;
@@ -162,7 +214,7 @@ export async function loadDetail(place, band, { force = false } = {}) {
     if (!force && stored?.key === url && Date.now() - stored.fetchedAt < MAX_AGE_MS) raw = stored.data;
     else {
       try {
-        raw = await fetchForecast([point], DETAIL_DAYS);
+        raw = await fetchForecast([point], DETAIL_DAYS, 0);
         detailMemo.set(url, { fetchedAt: Date.now(), data: raw });
         try {
           localStorage.setItem(DETAIL_KEY, JSON.stringify({ key: url, fetchedAt: Date.now(), data: raw }));
