@@ -32,12 +32,20 @@ function buildPoints(places) {
   return points;
 }
 
-export function buildUrl(points, days = FORECAST_DAYS) {
+// Variabili di riserva: se Open-Meteo va in errore con tutti i livelli del vento
+// (succede: "Something went wrong"), si riprova con meno livelli. windAt in snow.js
+// usa quello che c'è e in ultimo il vento a 700 hPa.
+const FALLBACK_VARS = [
+  HOURLY_VARS.filter((v) => !v.includes('600hPa')),
+  HOURLY_VARS.filter((v) => !v.includes('600hPa') && !v.startsWith('wind_speed_10m') && !v.startsWith('wind_direction_10m')),
+];
+
+export function buildUrl(points, days = FORECAST_DAYS, vars = HOURLY_VARS) {
   const q = new URLSearchParams({
     latitude: points.map((p) => p.lat).join(','),
     longitude: points.map((p) => p.lon).join(','),
     elevation: points.map((p) => p.elev).join(','),
-    hourly: HOURLY_VARS.join(','),
+    hourly: vars.join(','),
     models: MODELS.map((m) => m.id).join(','),
     forecast_days: String(days),
     past_days: String(PAST_DAYS),
@@ -53,6 +61,23 @@ function splitPast(point) {
   const past = point.days.filter((d) => d.date < today);
   const days = point.days.filter((d) => d.date >= today).slice(0, FORECAST_DAYS);
   return { past, days, total: totalRange(days), ...(point.now || {}) };
+}
+
+/** Scarica la previsione; se Open-Meteo risponde con un errore riprova con meno variabili. */
+async function fetchForecast(points, days) {
+  let lastErr = null;
+  for (const vars of [HOURLY_VARS, ...FALLBACK_VARS]) {
+    try {
+      const res = await fetch(buildUrl(points, days, vars));
+      if (!res.ok) throw new Error(`Open-Meteo ha risposto ${res.status}`);
+      const raw = await res.json();
+      if (raw?.error) throw new Error(`Open-Meteo: ${raw.reason}`);
+      return raw;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 // Riassunto di un punto: giorni (passati e futuri) e situazione "adesso".
@@ -93,9 +118,7 @@ export async function loadForecast(places, { force = false } = {}) {
     fetchedAt = cached.fetchedAt;
   } else {
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Open-Meteo ha risposto ${res.status}`);
-      const raw = await res.json();
+      const raw = await fetchForecast(points, FORECAST_DAYS);
       const list = Array.isArray(raw) ? raw : [raw];
       points2 = points.map((p, i) => compactPoint(list[i], p.elev, p.ridge));
       fetchedAt = Date.now();
@@ -139,9 +162,7 @@ export async function loadDetail(place, band, { force = false } = {}) {
     if (!force && stored?.key === url && Date.now() - stored.fetchedAt < MAX_AGE_MS) raw = stored.data;
     else {
       try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Open-Meteo ha risposto ${res.status}`);
-        raw = await res.json();
+        raw = await fetchForecast([point], DETAIL_DAYS);
         detailMemo.set(url, { fetchedAt: Date.now(), data: raw });
         try {
           localStorage.setItem(DETAIL_KEY, JSON.stringify({ key: url, fetchedAt: Date.now(), data: raw }));
