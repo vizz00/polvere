@@ -1,6 +1,6 @@
 import { PLACES, BANDS, REGIONS, externalLinks, webcamUrl, WEBCAM_ICON } from './places.js';
 import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
-import { loadForecast, loadDetail, cachedForecast } from './forecast.js';
+import { loadForecast, loadDetail, loadSlr, cachedForecast } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
 import { powderDays } from './powder.js';
 import { loadPrefs, savePrefs } from './storage.js';
@@ -345,6 +345,7 @@ let refreshSeq = 0;
 
 async function refresh(force = false) {
   const seq = ++refreshSeq;
+  if (state.detail?.error) state.detail = null; // grafici andati in errore: si riprova al prossimo disegno
   refreshAvalanche(force);
   const r = route();
   if (force && r.tab === 'posto') {
@@ -524,7 +525,8 @@ function snowCard(place, { detail = false } = {}) {
   const t = snowTotals(s);
   const days = s.days.slice(0, 10);
   const maxCm = Math.max(10, ...days.map((d) => d.snow?.median ?? 0));
-  const pw = detail ? powderDays([...(s.past || []), ...s.days], place.elevations[band], (s.past || []).length) : [];
+  const slr = state.slr?.key === `${place.id}|${band}|${place.elevations[band]}` ? state.slr.data : null;
+  const pw = detail ? powderDays([...(s.past || []), ...s.days], place.elevations[band], (s.past || []).length, slr) : [];
   const cols = days
     .map((d, i) => {
       const cm = d.snow?.median ?? 0;
@@ -557,7 +559,7 @@ function snowCard(place, { detail = false } = {}) {
         <div class="sc-days">${cols}</div>
         ${detail ? `<p class="pw-legend"><span class="pw-k">Polvere · SLR</span>${infoBtn('powder')}</p>${
           state.info.powder
-            ? `<p class="info-text">Polvere: il rapporto neve/acqua (SLR) dice quanti cm di neve fa 1 mm d'acqua. 10:1 vuol dire 10 cm di neve per 1 mm. Più fa freddo mentre nevica, più il rapporto sale. Lo stimiamo dalla temperatura alla quota. In grigio, il giorno dopo la nevicata: vale ancora se vento, caldo e pioggia non hanno rovinato la neve.</p>
+            ? `<p class="info-text">Polvere: il rapporto neve/acqua (SLR) dice quanti cm di neve fa 1 mm d'acqua. 10:1 vuol dire 10 cm di neve per 1 mm. Lo calcoliamo da dove nascono i fiocchi: nelle nuvole sopra il posto, dove l'aria sale di più. Tra −12 e −18 °C crescono le stelle di neve, leggerissime; più caldo i fiocchi si brinano e pesano. Metodo NOAA (Cobb), al massimo 25:1. In grigio, il giorno dopo la nevicata: vale ancora se vento, caldo e pioggia non hanno rovinato la neve.</p>
             <div class="slr-scale" aria-label="Scala del rapporto neve/acqua"><span class="slr-heavy"><b>&lt;9</b> pesante</span><span class="slr-mid"><b>9-12</b> media</span><span class="slr-light"><b>&gt;12</b> leggera</span></div>`
             : ''
         }` : ''}
@@ -696,7 +698,7 @@ function renderOverview() {
     <details class="explain">
       <summary>Come leggere</summary>
       <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e, per i prossimi 3 giorni, il segno dei pericoli. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
-      <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dal 6° giorno restano solo ECMWF e GFS.</p>
+      <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dall'8° giorno restano solo ECMWF e GFS.</p>
       <p>Segno dei prossimi 3 giorni: <span class="win win-chiusa legend"></span> pericolo · <span class="win win-avvisi legend"></span> attenzione · <span class="win win-aperta legend"></span> nessun pericolo, meteo buono (<span class="win win-aperta win-nobul legend"></span> senza bollettino) · <span class="win win-meteo legend"></span> nessun pericolo, meteo non buono. Un pericolo conta più del meteo.</p>
       <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: alla quota del posto, km/h e provenienza. Raffiche: vicino al suolo.</p>
     </details>`;
@@ -728,10 +730,17 @@ const WIND_BANDS = [
 
 async function ensureDetail(place, band, force = false) {
   const key = `${place.id}|${band}|${place.elevations[band]}`;
-  if (!force && state.detail?.key === key && (state.detail.data || state.detail.loading)) return;
+  // Anche dopo un errore non si riprova da soli a ogni ridisegno (senza rete andrebbe avanti all'infinito):
+  // si riprova con il tasto Riprova o trascinando giù.
+  if (!force && state.detail?.key === key && (state.detail.data || state.detail.loading || state.detail.error)) return;
   // Aggiornando si tengono i grafici vecchi a schermo finché arrivano i nuovi.
   const old = state.detail?.key === key ? state.detail.data : null;
   state.detail = { key, loading: !old, data: old, error: null };
+  // Rapporto neve/acqua dai profili in quota: chiamata a parte, non fa aspettare i grafici.
+  loadSlr(place, band, { force }).then((slr) => {
+    state.slr = { key, data: slr };
+    if (route().tab === 'posto') render();
+  });
   try {
     const data = await loadDetail(place, band, { force });
     if (state.detail.key === key) state.detail = { key, loading: false, data, error: null };
@@ -817,7 +826,7 @@ app.addEventListener(
 function chartBlock(place, band) {
   const d = state.detail;
   if (!d || d.loading) return '<p class="loading">Scarico i grafici a 10 giorni…</p>';
-  if (d.error) return `<p class="muted">${esc(d.error)}</p>`;
+  if (d.error) return `<section class="charts"><div class="notice"><p>${esc(d.error)}</p><button type="button" class="btn" data-retry-detail>Riprova</button></div></section>`;
   const series = d.data.series;
   setChartWidth(chartPx());
   const cur = CHARTS.find((c) => c.id === state.prefs.chart) || CHARTS[0];
@@ -1120,6 +1129,11 @@ app.addEventListener('click', (e) => {
   const asp = e.target.closest('[data-aspect]');
   if (asp) return toggleAspect(asp.dataset.placeAspect, asp.dataset.aspect);
   if (e.target.closest('[data-retry]')) return refresh(true);
+  if (e.target.closest('[data-retry-detail]')) {
+    const p = placeById(route().id);
+    if (p) ensureDetail(p, p.single ? 'valle' : state.prefs.band, true);
+    return render();
+  }
   const rm = e.target.closest('[data-remove-place]');
   if (rm) return removePlace(rm.dataset.removePlace);
   const copy = e.target.closest('[data-transfer-copy], [data-transfer-share]');
@@ -1142,6 +1156,7 @@ const BACK_LABEL = { panoramica: 'Località', valanghe: 'Valanghe', radar: 'Rada
 let prevHash = location.hash;
 window.addEventListener('hashchange', () => {
   state.menu = false;
+  if (state.detail?.error) state.detail = null; // cambiando pagina i grafici in errore si riprovano
   const from = route(prevHash);
   if (route().tab === 'posto' && from.tab !== 'posto' && BACK_LABEL[from.tab]) {
     state.backHref = prevHash || '#/';
