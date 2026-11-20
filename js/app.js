@@ -802,7 +802,7 @@ app.addEventListener(
 
 function chartBlock(place, band) {
   const d = state.detail;
-  if (!d || d.loading) return '<p class="loading">Scarico i grafici a 15 giorni…</p>';
+  if (!d || d.loading) return '<p class="loading">Scarico i grafici a 10 giorni…</p>';
   if (d.error) return `<p class="muted">${esc(d.error)}</p>`;
   const series = d.data.series;
   setChartWidth(chartPx());
@@ -842,7 +842,7 @@ function chartBlock(place, band) {
     } · <span class="lg-model"></span> singoli modelli</span></div>
     ${scrollCharts(chart, precipStrip(series, { highlight: hl }))}
     <p class="chart-foot"><span class="lg-snow"></span> neve <span class="lg-rain"></span> pioggia <span class="lg-cloud"></span> nuvole${
-      cur.id === 'snowTotal' && lastVal != null ? ` · <b>${roundCm(lastVal)} cm</b> in 15 giorni (${hl ? 'modello scelto' : 'mediana'})` : ''
+      cur.id === 'snowTotal' && lastVal != null ? ` · <b>${roundCm(lastVal)} cm</b> in 10 giorni (${hl ? 'modello scelto' : 'mediana'})` : ''
     }</p>
   </section>`;
 }

@@ -15,7 +15,7 @@ try {
 }
 const MAX_AGE_MS = 60 * 60 * 1000; // un'ora
 export const FORECAST_DAYS = 10; // panoramica: prossimi 1-5 e 6-10 giorni
-export const DETAIL_DAYS = 16; // dettaglio del posto: grafici a 15 giorni
+export const DETAIL_DAYS = 10; // dettaglio del posto: grafici a 10 giorni (più in là la previsione non serve)
 // Giorni passati scaricati insieme alla previsione: servono alle regole dei prossimi 3 giorni
 // (neve fresca degli ultimi 3 giorni, giorni secchi prima della nevicata, neve soffice degli ultimi 7).
 export const PAST_DAYS = 8;
@@ -139,7 +139,7 @@ export async function loadForecast(places, { force = false } = {}) {
   return { fetchedAt, stale, byPlace };
 }
 
-// ---------- dettaglio di un posto: 15 giorni, una sola quota ----------
+// ---------- dettaglio di un posto: 10 giorni, una sola quota ----------
 
 const DETAIL_KEY = 'mm.detail.v1';
 const detailMemo = new Map();
