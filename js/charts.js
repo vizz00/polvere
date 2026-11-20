@@ -110,14 +110,17 @@ export function lineChart(series, opts) {
   const top = opts.arrows ? PAD.t + 14 : PAD.t; // spazio per le frecce del vento sopra il grafico
   const { Wd, plotW, pageW } = geometry(times);
   const x = (i) => PAD.l + (i / Math.max(1, n - 1)) * plotW;
-  const y = (v) => top + (1 - (v - lo) / (hi - lo)) * (bottom - top);
+  // Un po' d'aria sopra il massimo: le linee in cima non toccano il bordo.
+  const air = 12;
+  const y = (v) => top + air + (1 - (v - lo) / (hi - lo)) * (bottom - top - air);
   // Inizio di ogni pagina: lì si ripetono le etichette (quota, fasce del vento).
   const pages = [];
   for (let px = PAD.l; px < PAD.l + plotW - 1; px += pageW) pages.push(px);
 
   let svg = '';
   for (const b of opts.bands || []) {
-    const y1 = y(Math.min(hi, b.to));
+    if (b.from >= hi) continue;
+    const y1 = b.to >= hi ? top : y(b.to);
     const y2 = y(Math.max(lo, b.from));
     if (y2 <= y1) continue;
     svg += `<rect class="band ${b.cls}" x="${PAD.l}" y="${y1}" width="${plotW}" height="${y2 - y1}"/>`;
