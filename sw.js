@@ -1,6 +1,6 @@
 // Service worker: rende l'app installabile e apribile anche senza rete.
 // Quando cambi i file dell'app, aumenta il numero di VERSION.
-const VERSION = 'v49';
+const VERSION = 'v50';
 const CACHE = `mm-shell-${VERSION}`;
 // Tutti i file dell'app, così funziona senza rete già dalla prima apertura.
 const SHELL = [
@@ -25,6 +25,7 @@ const SHELL = [
   'js/transfer.js',
   'js/season.js',
   'js/season-view.js',
+  'js/slr.js',
   'js/snow.js',
   'js/storage.js',
   'js/window.js',

@@ -1,6 +1,6 @@
 import { PLACES, BANDS, REGIONS, externalLinks, webcamUrl, WEBCAM_ICON } from './places.js';
 import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
-import { loadForecast, loadDetail } from './forecast.js';
+import { loadForecast, loadDetail, loadSlr } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
 import { powderDays } from './powder.js';
 import { loadPrefs, savePrefs } from './storage.js';
@@ -510,7 +510,8 @@ function snowCard(place, { detail = false } = {}) {
   const t = snowTotals(s);
   const days = s.days.slice(0, 10);
   const maxCm = Math.max(10, ...days.map((d) => d.snow?.median ?? 0));
-  const pw = detail ? powderDays([...(s.past || []), ...s.days], place.elevations[band], (s.past || []).length) : [];
+  const slr = state.slr?.key === `${place.id}|${band}|${place.elevations[band]}` ? state.slr.data : null;
+  const pw = detail ? powderDays([...(s.past || []), ...s.days], place.elevations[band], (s.past || []).length, slr) : [];
   const cols = days
     .map((d, i) => {
       const cm = d.snow?.median ?? 0;
@@ -543,7 +544,7 @@ function snowCard(place, { detail = false } = {}) {
         <div class="sc-days">${cols}</div>
         ${detail ? `<p class="pw-legend"><span class="pw-k">Polvere · SLR</span>${infoBtn('powder')}</p>${
           state.info.powder
-            ? `<p class="info-text">Polvere: il rapporto neve/acqua (SLR) dice quanti cm di neve fa 1 mm d'acqua. 10:1 vuol dire 10 cm di neve per 1 mm. Più fa freddo mentre nevica, più il rapporto sale. Lo stimiamo dalla temperatura alla quota. In grigio, il giorno dopo la nevicata: vale ancora se vento, caldo e pioggia non hanno rovinato la neve.</p>
+            ? `<p class="info-text">Polvere: il rapporto neve/acqua (SLR) dice quanti cm di neve fa 1 mm d'acqua. 10:1 vuol dire 10 cm di neve per 1 mm. Lo calcoliamo da dove nascono i fiocchi: nelle nuvole sopra il posto, dove l'aria sale di più. Tra −12 e −18 °C crescono le stelle di neve, leggerissime; più caldo i fiocchi si brinano e pesano. Metodo NOAA (Cobb), al massimo 25:1. In grigio, il giorno dopo la nevicata: vale ancora se vento, caldo e pioggia non hanno rovinato la neve.</p>
             <div class="slr-scale" aria-label="Scala del rapporto neve/acqua"><span class="slr-heavy"><b>&lt;9</b> pesante</span><span class="slr-mid"><b>9-12</b> media</span><span class="slr-light"><b>&gt;12</b> leggera</span></div>`
             : ''
         }` : ''}
@@ -718,6 +719,11 @@ async function ensureDetail(place, band, force = false) {
   // Aggiornando si tengono i grafici vecchi a schermo finché arrivano i nuovi.
   const old = state.detail?.key === key ? state.detail.data : null;
   state.detail = { key, loading: !old, data: old, error: null };
+  // Rapporto neve/acqua dai profili in quota: chiamata a parte, non fa aspettare i grafici.
+  loadSlr(place, band, { force }).then((slr) => {
+    state.slr = { key, data: slr };
+    if (route().tab === 'posto') render();
+  });
   try {
     const data = await loadDetail(place, band, { force });
     if (state.detail.key === key) state.detail = { key, loading: false, data, error: null };
