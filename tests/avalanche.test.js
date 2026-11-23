@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  romeDate, bulletinUrl, findBulletin, summarizeBulletin, elevationText, zoneInGeojson,
+  SITUAZIONI_TIPO, romeDate, bulletinUrl, findBulletin, summarizeBulletin, elevationText, zoneInGeojson,
 } from '../js/avalanche.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -139,6 +139,7 @@ test('Cervinia 23/11/2026: tendenza, testi, manto nevoso, situazione tipo e zone
   assert.equal(s.tendency.type, 'decreasing');
   assert.equal(s.tendency.day, '2026-11-24');
   assert.deepEqual(s.patterns, [6]);
+  assert.equal(SITUAZIONI_TIPO[6], 'neve a debole coesione e vento');
   assert.equal(s.headline.length, 2);
   assert.match(s.snowpack[0], /60 ai 100 cm/);
   assert.equal(s.zones[0], 'Bassa e Media Valpelline');

@@ -307,7 +307,7 @@ table.models tr.sep th, table.models tr.sep td { border-top: 2px solid var(--lin
 .aval-trend small { color: var(--muted); font-size: 11px; }
 .aval-trend-increasing { color: #ff6b5e; }
 .aval-st { margin: 8px 0 0; font-size: 13px; }
-.aval-st-chip { display: inline-block; padding: 2px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; }
+.aval-st-chip { display: inline-block; text-decoration: none; min-height: 28px; padding: 2px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; }
 .aval-more { margin-top: 8px; }
 .aval-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--accent); font-weight: 600; }
 .aval-more-body h4 { margin: 12px 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }

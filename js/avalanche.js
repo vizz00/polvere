@@ -135,8 +135,20 @@ export function zoneLabel(name) {
     .join(' ');
 }
 
-// Le 10 situazioni tipo AINEVA ("DP6" nel file = st.6). Nomi noti con certezza; gli altri restano solo "st.N".
-export const SITUAZIONI_TIPO = { 6: 'neve a debole coesione e vento' };
+// Le 10 situazioni tipo AINEVA ("DP6" nel file = st.6), nomi dalla pagina bollettini.aineva.it/education/danger-patterns.
+export const SITUAZIONI_TIPO = {
+  1: 'strato debole persistente basale',
+  2: 'neve da slittamento',
+  3: 'pioggia su neve',
+  4: 'freddo su caldo / caldo su freddo',
+  5: 'neve dopo un lungo periodo di freddo',
+  6: 'neve a debole coesione e vento',
+  7: 'passaggio da poca a molta neve',
+  8: 'brina di superficie sepolta',
+  9: 'neve pallottolare sepolta',
+  10: 'situazione primaverile',
+};
+export const SITUAZIONE_TIPO_URL = (n) => `https://bollettini.aineva.it/education/danger-patterns#dp${n}`;
 export const dangerPatternNumber = (code) => {
   const m = /^DP\s*(\d+)$/i.exec(String(code));
   return m ? Number(m[1]) : null;

@@ -1,6 +1,6 @@
 // Pezzi di pagina per il pericolo valanghe (badge nella Panoramica, blocco nel dettaglio,
 // schermata Valanghe). Mostrano solo i valori ufficiali del bollettino.
-import { DANGER, SITUAZIONI_TIPO, romeDate, isAineva, ainevaMapUrl, ainevaBulletinMapUrl } from './avalanche.js';
+import { DANGER, SITUAZIONI_TIPO, SITUAZIONE_TIPO_URL, romeDate, isAineva, ainevaMapUrl, ainevaBulletinMapUrl } from './avalanche.js';
 import { REGIONS } from './places.js';
 
 const esc = (s) =>
@@ -96,7 +96,7 @@ function trendChip(s) {
 function patternLine(s) {
   if (!s.patterns?.length) return '';
   return `<p class="aval-st"><span class="muted">Situazione tipo</span> ${s.patterns
-    .map((n) => `<span class="aval-st-chip">st.${n}${SITUAZIONI_TIPO[n] ? ` · ${esc(SITUAZIONI_TIPO[n])}` : ''}</span>`)
+    .map((n) => `<a class="aval-st-chip" href="${esc(SITUAZIONE_TIPO_URL(n))}" target="_blank" rel="noopener">st.${n}${SITUAZIONI_TIPO[n] ? ` · ${esc(SITUAZIONI_TIPO[n])}` : ''} ↗</a>`)
     .join(' ')}</p>`;
 }
 
