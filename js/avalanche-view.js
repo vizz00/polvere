@@ -279,6 +279,16 @@ export function avalPage({ places, aval, archiveDay, today }) {
       <p>Il numero è il grado della scala europea a 5 livelli scritto nel bollettino ufficiale. Quando il bollettino indica una quota limite,
       ci sono due gradi: uno sopra e uno sotto quella quota. I simboli +, = o − accanto al numero sono il sottolivello pubblicato dall'SLF.</p>
       <p>La micro-zona è quella che contiene il paese del posto, secondo i confini ufficiali EAWS. Per la zona esatta della gita, e per tutto il testo dei previsori, apri il bollettino.</p>
+      <p>Per approfondire (AINEVA): ${[
+        ['Scala del pericolo', 'danger-scale'],
+        ['Problemi valanghivi', 'avalanche-problems'],
+        ['Dimensioni valanghe', 'avalanche-sizes'],
+        ['Stabilità del manto', 'snowpack-stability'],
+        ['Situazioni tipo', 'danger-patterns'],
+        ['Manuale', 'handbook'],
+      ]
+        .map(([t, p]) => `<a href="https://bollettini.aineva.it/education/${p}" target="_blank" rel="noopener">${t} ↗</a>`)
+        .join(' · ')}</p>
       <p>Dati: <a href="https://www.avalanches.org/" target="_blank" rel="noopener">EAWS</a> con AINEVA e
       <a href="https://www.slf.ch/it/bollettino-valanghe-e-situazione-nivologica/" target="_blank" rel="noopener">SLF</a>, licenza CC BY 4.0.</p>
     </section>`;
