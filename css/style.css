@@ -306,9 +306,9 @@ table.models tr.sep th, table.models tr.sep td { border-top: 2px solid var(--lin
 .aval-trend > span { font-size: 24px; font-weight: 700; }
 .aval-trend small { color: var(--muted); font-size: 11px; }
 .aval-trend-increasing { color: #ff6b5e; }
-.aval-st { margin: 8px 0 0; font-size: 13px; }
-.aval-st-chip { display: inline-block; text-decoration: none; min-height: 28px; padding: 2px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; }
-.aval-more { margin-top: 8px; }
+.aval-st { margin: 10px 0 0; font-size: 14px; line-height: 1.4; }
+.aval-st-chip { color: var(--text); font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.aval-more { margin-top: 18px; }
 .aval-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 12px; color: var(--accent); font-weight: 600; list-style: none; }
 .aval-more summary::-webkit-details-marker { display: none; }
 .aval-more summary::after { content: ''; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translate(-2px, -2px); transition: transform .15s; }
