@@ -30,22 +30,6 @@ test('neve di ieri conta per oggi', () => {
   assert.equal(r.date, 'd1');
 });
 
-test('giorno con pericolo ✕ vale la metà', () => {
-  const s = sum([day('d1'), day('d2', { snow: 30 }), day('d3')]);
-  const free = powderRank(s, ELEV);
-  const danger = powderRank(s, ELEV, [null, { status: 'chiusa' }, { status: 'chiusa' }]);
-  assert.equal(danger.score, free.score / 2);
-  assert.equal(danger.danger, true);
-  assert.equal(danger.level, free.level); // la qualità della neve resta quella
-});
-
-test('il giorno dopo senza pericolo può battere il giorno con ✕', () => {
-  const s = sum([day('d1'), day('d2', { snow: 30 }), day('d3')]);
-  const r = powderRank(s, ELEV, [null, { status: 'chiusa' }, null]);
-  assert.equal(r.date, 'd3');
-  assert.equal(r.danger, false);
-});
-
 test('senza dati: null', () => {
   assert.equal(powderRank(null, ELEV), null);
   assert.equal(powderRank({ days: [] }, ELEV), null);
