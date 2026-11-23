@@ -1,6 +1,6 @@
 // Pezzi di pagina per il pericolo valanghe (badge nella Panoramica, blocco nel dettaglio,
 // schermata Valanghe). Mostrano solo i valori ufficiali del bollettino.
-import { DANGER, romeDate, isAineva, ainevaMapUrl, ainevaBulletinMapUrl } from './avalanche.js';
+import { DANGER, SITUAZIONI_TIPO, SITUAZIONE_TIPO_URL, romeDate, isAineva, ainevaMapUrl, ainevaBulletinMapUrl } from './avalanche.js';
 import { REGIONS } from './places.js';
 
 const esc = (s) =>
@@ -79,6 +79,56 @@ const metaLine = (s) =>
 const sameMeta = (a, b) =>
   a.publicationTime === b.publicationTime && a.validTo === b.validTo && a.provider === b.provider && !!a.unscheduled === !!b.unscheduled;
 
+const TREND_ARROW = { decreasing: '↘', steady: '→', increasing: '↗' };
+const paras = (list) => list.map((t) => `<p>${esc(t)}</p>`).join('');
+
+// Freccia di tendenza accanto ai gradi: solo simbolo e giorno.
+function trendChip(s) {
+  const t = s.tendency;
+  if (!t?.type || !TREND_ARROW[t.type]) return '';
+  const label = `Tendenza: pericolo ${t.label || ''}${t.day ? ` per ${longDay(t.day)}` : ''}`.trim();
+  return `<span class="aval-trend aval-trend-${esc(t.type)}" role="img" aria-label="${esc(label)}" title="${esc(label)}"><span aria-hidden="true">${TREND_ARROW[t.type]}</span>${
+    t.day ? `<small>${esc(shortDay(t.day))}</small>` : ''
+  }</span>`;
+}
+
+// Situazione tipo AINEVA (es. "st.6 · neve a debole coesione e vento").
+function patternLine(s) {
+  if (!s.patterns?.length) return '';
+  return `<p class="aval-st"><span class="muted">Situazione tipo</span> ${s.patterns
+    .map((n) => `<a class="aval-st-chip" href="${esc(SITUAZIONE_TIPO_URL(n))}" target="_blank" rel="noopener">st.${n}${SITUAZIONI_TIPO[n] ? ` · ${esc(SITUAZIONI_TIPO[n])}` : ''} ↗</a>`)
+    .join(' ')}</p>`;
+}
+
+// Testi del previsore dietro il tasto "Dettagli".
+function detailsBlock(s) {
+  const parts = [];
+  if (s.headline.length || s.activity.length) parts.push(`<h4>Pericolo</h4>${paras(s.headline)}${paras(s.activity)}`);
+  if (s.snowpack.length) parts.push(`<h4>Manto nevoso</h4>${paras(s.snowpack)}`);
+  if (s.tendency?.text?.length) parts.push(`<h4>Tendenza${s.tendency.label ? `: ${esc(s.tendency.label)}` : ''}${s.tendency.day ? ` · ${esc(shortDay(s.tendency.day))}` : ''}</h4>${paras(s.tendency.text)}`);
+  if (s.weather?.length) parts.push(`<h4>Meteo previsto</h4>${paras(s.weather)}`);
+  const probs = s.problems.filter((p) => p.sizeN || p.frequency || p.stability || p.note.length);
+  if (probs.length)
+    parts.push(
+      `<h4>Problemi nel dettaglio</h4><ul>${probs
+        .map(
+          (p) =>
+            `<li><b>${esc(p.label)}</b>${[
+              p.size ? `valanghe ${p.size}` : '',
+              p.frequency ? `frequenza ${p.frequency}` : '',
+              p.stability ? `stabilità ${p.stability}` : '',
+            ]
+              .filter(Boolean)
+              .map((x) => ` <span class="muted">· ${esc(x)}</span>`)
+              .join('')}${p.note.length ? `<br><span class="muted">${esc(p.note.join(' '))}</span>` : ''}</li>`,
+        )
+        .join('')}</ul>`,
+    );
+  if (s.zones?.length > 1) parts.push(`<h4>Zone coperte da questo bollettino</h4><p>${esc(s.zones.join(', '))}</p>`);
+  if (!parts.length) return '';
+  return `<details class="aval-more"><summary>Dettagli</summary><div class="aval-more-body">${parts.join('')}</div></details>`;
+}
+
 function dayBlock(title, s, place, day, { meta = true } = {}) {
   const periods = s.periods
     .map(
@@ -106,8 +156,10 @@ function dayBlock(title, s, place, day, { meta = true } = {}) {
   return `<div class="aval-day">
     <p class="aval-title">${title}</p>
     <div class="aval-day-body"><div>
-    ${periods}
+    ${trendChip(s) ? `<div class="aval-grade-row"><div>${periods}</div>${trendChip(s)}</div>` : periods}
     ${problems}
+    ${patternLine(s)}
+    ${detailsBlock(s)}
     </div>${img}</div>
     ${meta ? metaLine(s) : ''}
   </div>`;
@@ -227,6 +279,16 @@ export function avalPage({ places, aval, archiveDay, today }) {
       <p>Il numero è il grado della scala europea a 5 livelli scritto nel bollettino ufficiale. Quando il bollettino indica una quota limite,
       ci sono due gradi: uno sopra e uno sotto quella quota. I simboli +, = o − accanto al numero sono il sottolivello pubblicato dall'SLF.</p>
       <p>La micro-zona è quella che contiene il paese del posto, secondo i confini ufficiali EAWS. Per la zona esatta della gita, e per tutto il testo dei previsori, apri il bollettino.</p>
+      <p>Per approfondire (AINEVA): ${[
+        ['Scala del pericolo', 'danger-scale'],
+        ['Problemi valanghivi', 'avalanche-problems'],
+        ['Dimensioni valanghe', 'avalanche-sizes'],
+        ['Stabilità del manto', 'snowpack-stability'],
+        ['Situazioni tipo', 'danger-patterns'],
+        ['Manuale', 'handbook'],
+      ]
+        .map(([t, p]) => `<a href="https://bollettini.aineva.it/education/${p}" target="_blank" rel="noopener">${t} ↗</a>`)
+        .join(' · ')}</p>
       <p>Dati: <a href="https://www.avalanches.org/" target="_blank" rel="noopener">EAWS</a> con AINEVA e
       <a href="https://www.slf.ch/it/bollettino-valanghe-e-situazione-nivologica/" target="_blank" rel="noopener">SLF</a>, licenza CC BY 4.0.</p>
     </section>`;

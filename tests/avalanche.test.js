@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  romeDate, bulletinUrl, findBulletin, summarizeBulletin, elevationText, zoneInGeojson,
+  SITUAZIONI_TIPO, romeDate, bulletinUrl, findBulletin, summarizeBulletin, elevationText, zoneInGeojson,
 } from '../js/avalanche.js';
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -132,4 +132,18 @@ test('micro-zona da coordinate, con zone scadute ignorate', () => {
   assert.equal(zoneInGeojson(geo, 45.854, 7.938, '2026-11-09'), 'B'); // Alagna
   assert.equal(zoneInGeojson(geo, 47, 9, '2026-11-09'), null);
   assert.equal(zoneInGeojson(geo, 45.936, 7.631, '2020-01-01'), 'OLD');
+});
+
+test('Cervinia 23/11/2026: tendenza, testi, manto nevoso, situazione tipo e zone', () => {
+  const s = summarizeBulletin(load('eaws-2026-11-23-IT-23.it.json'), 'IT-23-AO-20');
+  assert.equal(s.tendency.type, 'decreasing');
+  assert.equal(s.tendency.day, '2026-11-24');
+  assert.deepEqual(s.patterns, [6]);
+  assert.equal(SITUAZIONI_TIPO[6], 'neve a debole coesione e vento');
+  assert.equal(s.headline.length, 2);
+  assert.match(s.snowpack[0], /60 ai 100 cm/);
+  assert.equal(s.zones[0], 'Bassa e Media Valpelline');
+  assert.ok(s.zones.includes('Cervinia e Alta Valpelline'));
+  assert.equal(s.problems[0].stability, 'scarsa');
+  assert.equal(s.problems[0].size, 'grandi');
 });

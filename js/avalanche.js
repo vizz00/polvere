@@ -11,7 +11,7 @@
 
 const BULLETIN_BASE = 'https://static.avalanche.report/eaws_bulletins/eaws_bulletins';
 const REGIONS_BASE = 'https://regions.avalanches.org';
-const CACHE_KEY = 'mm.avalanche.v1';
+const CACHE_KEY = 'mm.avalanche.v2';
 const ZONE_CACHE_KEY = 'mm.avalanche-zones.v1';
 const MAX_AGE_MS = 30 * 60 * 1000; // i bollettini escono verso le 17 e (SLF) alle 8
 
@@ -107,6 +107,58 @@ function sortKey(elev) {
   return 0;
 }
 
+// Testi dei previsori: i tag HTML (SLF) diventano interruzioni, i doppi spazi separano i paragrafi.
+export function cleanText(v) {
+  if (typeof v !== 'string') return [];
+  return v
+    .replace(/<[^>]*>/g, '  ')
+    .replace(/&nbsp;/g, ' ')
+    .split(/\s{2,}|\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+const SMALL = new Set(['e', 'di', 'del', 'della', 'dello', 'dei', 'delle', 'da', 'a', 'in', 'la', 'le', 'il', 'al', 'ai']);
+// "D - CERVINIA E ALTA VALPELLINE" -> "Cervinia e Alta Valpelline"
+export function zoneLabel(name) {
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  return String(name || '')
+    .replace(/^[A-Z]\s+-\s+/, '')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w, i) =>
+      w
+        .split(/([-'’])/)
+        .map((part, j) => ((i > 0 && j === 0 && SMALL.has(part)) || (j === 0 && part.length === 1 && /['’]/.test(w[1] || '')) ? part : /^[-'’]$/.test(part) ? part : cap(part)))
+        .join(''),
+    )
+    .join(' ');
+}
+
+// Le 10 situazioni tipo AINEVA ("DP6" nel file = st.6), nomi dalla pagina bollettini.aineva.it/education/danger-patterns.
+export const SITUAZIONI_TIPO = {
+  1: 'strato debole persistente basale',
+  2: 'neve da slittamento',
+  3: 'pioggia su neve',
+  4: 'freddo su caldo / caldo su freddo',
+  5: 'neve dopo un lungo periodo di freddo',
+  6: 'neve a debole coesione e vento',
+  7: 'passaggio da poca a molta neve',
+  8: 'brina di superficie sepolta',
+  9: 'neve pallottolare sepolta',
+  10: 'situazione primaverile',
+};
+export const SITUAZIONE_TIPO_URL = (n) => `https://bollettini.aineva.it/education/danger-patterns#dp${n}`;
+export const dangerPatternNumber = (code) => {
+  const m = /^DP\s*(\d+)$/i.exec(String(code));
+  return m ? Number(m[1]) : null;
+};
+
+const TENDENCY = { decreasing: 'in diminuzione', steady: 'stabile', increasing: 'in aumento' };
+const FREQUENCY = { nearly_none: 'pochissimi', few: 'pochi', some: 'alcuni', many: 'molti' };
+const STABILITY = { good: 'buona', fair: 'discreta', poor: 'scarsa', very_poor: 'molto scarsa' };
+const SIZE = { 1: 'piccole', 2: 'medie', 3: 'grandi', 4: 'molto grandi', 5: 'estreme' };
+
 const SUBDIVISION = { plus: '+', minus: '−', neutral: '=' };
 
 function ratingRow(r) {
@@ -153,7 +205,27 @@ export function summarizeBulletin(json, zoneId) {
     providerUrl: b.source?.provider?.website || null,
     max: levels.length ? Math.max(...levels) : null,
     periods,
+    // Testi del previsore (quando il servizio li pubblica: AINEVA e SLF)
+    headline: cleanText(b.avalancheActivity?.highlights),
+    activity: cleanText(b.avalancheActivity?.comment),
+    snowpack: cleanText(b.snowpackStructure?.comment),
+    weather: cleanText(b.weatherForecast?.comment),
+    tendency: (b.tendency || [])[0]
+      ? {
+          type: b.tendency[0].tendencyType || null,
+          label: TENDENCY[b.tendency[0].tendencyType] || null,
+          text: cleanText(b.tendency[0].highlights || b.tendency[0].comment),
+          day: b.tendency[0].validTime?.startTime ? romeDate(new Date(b.tendency[0].validTime.startTime), 0) : null,
+        }
+      : null,
+    patterns: (b.customData?.LWD_Tyrol?.dangerPatterns || []).map(dangerPatternNumber).filter((n) => n != null),
+    zones: (b.regions || []).map((r) => zoneLabel(r.name)).filter(Boolean).sort((x, y) => x.localeCompare(y, 'it')),
     problems: (b.avalancheProblems || []).map((p) => ({
+      size: SIZE[p.avalancheSize] || null,
+      sizeN: p.avalancheSize || null,
+      frequency: FREQUENCY[p.frequency] || null,
+      stability: STABILITY[p.snowpackStability] || null,
+      note: cleanText(p.comment),
       type: p.problemType,
       label: PROBLEMS[p.problemType] || p.problemType,
       where: elevationText(p.elevation),

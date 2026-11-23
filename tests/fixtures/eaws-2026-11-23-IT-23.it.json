@@ -1,0 +1,131 @@
+{
+ "bulletins": [
+  {
+   "avalancheActivity": {
+    "comment": "Specialmente dai bacini di alimentazione in quota si prevedono valanghe spontanee di grandi dimensioni che possono avanzare sino a bassa quota. Al di sopra dei 2300 m circa esse possono coinvolgere i vari strati di neve fresca e ventata.  Gli accumuli di neve ventata si depositeranno su strati sfavorevoli. Essi e devono essere valutati con attenzione.  Un singolo escursionista può provocare il distacco di valanghe.",
+    "highlights": "Attualmente il servizio di previsione valanghe dispone di informazioni limitate dal territorio.  La neve fresca così come gli accumuli di neve ventata rappresentano la principale fonte di pericolo."
+   },
+   "avalancheProblems": [
+    {
+     "problemType": "wind_slab",
+     "aspects": [
+      "E",
+      "SE",
+      "W",
+      "NW",
+      "N",
+      "S",
+      "SW",
+      "NE"
+     ],
+     "avalancheSize": 3,
+     "elevation": {
+      "lowerBound": "2300"
+     },
+     "frequency": "some",
+     "snowpackStability": "poor",
+     "validTimePeriod": "all_day"
+    },
+    {
+     "problemType": "new_snow",
+     "aspects": [
+      "E",
+      "SE",
+      "W",
+      "NW",
+      "N",
+      "S",
+      "SW",
+      "NE"
+     ],
+     "avalancheSize": 2,
+     "elevation": {
+      "lowerBound": "2000"
+     },
+     "frequency": "some",
+     "snowpackStability": "poor",
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "bulletinID": "f9690f40-2b2f-4849-99f1-5f724db01d9e",
+   "customData": {
+    "ALBINA": {
+     "mainDate": "2026-11-23"
+    },
+    "LWD_Tyrol": {
+     "dangerPatterns": [
+      "DP6"
+     ]
+    }
+   },
+   "dangerRatings": [
+    {
+     "mainValue": "moderate",
+     "elevation": {
+      "upperBound": "2300"
+     },
+     "validTimePeriod": "all_day"
+    },
+    {
+     "mainValue": "considerable",
+     "elevation": {
+      "lowerBound": "2300"
+     },
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "lang": "it",
+   "publicationTime": "2026-11-22T16:00:00+00:00",
+   "regions": [
+    {
+     "regionID": "IT-23-AO-20",
+     "name": "D - CERVINIA E ALTA VALPELLINE"
+    },
+    {
+     "regionID": "IT-23-AO-01",
+     "name": "A - SAINT-PIERRE SAINT-NICHOLAS"
+    },
+    {
+     "regionID": "IT-23-AO-13",
+     "name": "C - VALSAVARENCHE"
+    },
+    {
+     "regionID": "IT-23-AO-21",
+     "name": "C - VAL DI RHEMES"
+    },
+    {
+     "regionID": "IT-23-AO-17",
+     "name": "D - LA SALLE MORGEX"
+    },
+    {
+     "regionID": "IT-23-AO-19",
+     "name": "D - BASSA E MEDIA VALPELLINE"
+    }
+   ],
+   "snowpackStructure": {
+    "comment": "Al di sopra dei 2200 m circa sono presenti dai 60 ai 100 cm di neve, soprattutto al di sopra dei 2500 m circa.  Principalmente sui pendii molto ripidi, sono cadute alcune valanghe asciutte di medie dimensioni.  Con il vento a tratti forte proveniente da nord ovest, domenica si sono formati nuovi accumuli di neve ventata. Il manto nevoso sarà instabile in alcuni punti.  La parte basale del manto nevoso è umida, specialmente al di sotto dei 2300 m circa."
+   },
+   "source": {
+    "provider": {
+     "name": "AINEVA Valle d'Aosta",
+     "website": "https://bollettini.aineva.it"
+    }
+   },
+   "tendency": [
+    {
+     "highlights": "Il pericolo di valanghe spontanee diminuirà gradualmente.",
+     "tendencyType": "decreasing",
+     "validTime": {
+      "startTime": "2026-11-23T23:00:00+00:00",
+      "endTime": "2026-11-24T23:00:00+00:00"
+     }
+    }
+   ],
+   "unscheduled": false,
+   "validTime": {
+    "startTime": "2026-11-22T23:00:00+00:00",
+    "endTime": "2026-11-23T23:00:00+00:00"
+   }
+  }
+ ]
+}
