@@ -1,4 +1,5 @@
 import { PLACES, BANDS, REGIONS, externalLinks, webcamUrl, WEBCAM_ICON } from './places.js';
+import { roseSvg } from './rose.js';
 import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
 import { loadForecast, loadDetail, loadSlr, cachedForecast, cachedBand, overviewBand } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
@@ -189,20 +190,9 @@ function windowMark(w) {
   return `<span class="${winClass(w)}" role="img" aria-label="${t}" title="${t}"></span>`;
 }
 
-// Rosa a 8 settori: i versanti caricati dal vento in arancione, quelli scelti dall'utente bordati.
+// Rosa a 8 spicchi (stile bollettino): versanti caricati dal vento pieni, quelli scelti dall'utente bordati.
 function aspectRose(loaded, mine = [], size = 64) {
-  const r = size / 2;
-  const paths = SECTORS.map((name, i) => {
-    const a0 = ((i * 45 - 22.5 - 90) * Math.PI) / 180;
-    const a1 = ((i * 45 + 22.5 - 90) * Math.PI) / 180;
-    const R = r - 2;
-    const p = `M${r},${r} L${r + R * Math.cos(a0)},${r + R * Math.sin(a0)} A${R},${R} 0 0 1 ${r + R * Math.cos(a1)},${r + R * Math.sin(a1)} Z`;
-    const cls = `${loaded.includes(name) ? 'loaded' : ''} ${mine.includes(name) ? 'mine' : ''}`;
-    return `<path class="${cls}" d="${p}"><title>${name}</title></path>`;
-  }).join('');
-  return `<svg class="rose" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Versanti caricati: ${
-    loaded.length ? loaded.join(', ') : 'nessuno'
-  }">${paths}<text x="${r}" y="9" text-anchor="middle">N</text></svg>`;
+  return roseSvg(loaded, { size, mine, label: `Versanti caricati: ${loaded.length ? loaded.join(', ') : 'nessuno'}` });
 }
 
 // Giorni dei prossimi 3 giorni aperti dall'utente: restano aperti quando la pagina si ridisegna.
