@@ -226,8 +226,8 @@ main { max-width: 980px; margin: 0 auto; padding: 14px 16px 24px; outline: none;
 .sig-info { color: var(--muted); }
 .win-rose { display: grid; justify-items: center; gap: 2px; font-size: 11px; flex: none; }
 .rose { flex: none; }
-.rose path { fill: #f2f7ff; stroke: #0a1530; stroke-width: 1; stroke-linejoin: round; }
-.rose .on path { fill: #2f6fb8; }
+.rose path { fill: #fff; stroke: #0a1530; stroke-width: 1.4; stroke-linejoin: round; }
+.rose .on path { fill: #1f5c8f; }
 .win-rose .rose .on path { fill: var(--win-warn); }
 .rose .mine path { stroke: var(--accent); stroke-width: 2; }
 .rose text { fill: #0a1530; text-anchor: middle; font-weight: 700; pointer-events: none; }

@@ -17,12 +17,11 @@ export function roseSvg(selected = [], { size = 44, mine = [], label = '', cls =
   const fs = Math.max(6, size * 0.19).toFixed(1);
   const petals = ORDER.map((name, i) => {
     const deg = i * 45;
-    const card = i % 2 === 0;
-    const len = card ? R : R * 0.8;
-    const d = `M${c},${c} L${pt(len * 0.6, deg - 30)} L${pt(len, deg)} L${pt(len * 0.6, deg + 30)} Z`;
+    const len = R;
+    const d = `M${c},${c} L${pt(R * 0.74, deg - 22.5)} L${pt(len, deg)} L${pt(R * 0.74, deg + 22.5)} Z`;
     const cls2 = `${on.has(name) ? 'on' : ''}${hi.has(name) ? ' mine' : ''}`;
     const l = LETTER[name]
-      ? `<text x="${pt(len * 0.55, deg).split(',')[0]}" y="${(Number(pt(len * 0.55, deg).split(',')[1]) + size * 0.065).toFixed(2)}" font-size="${fs}">${LETTER[name]}</text>`
+      ? `<text x="${pt(len * 0.6, deg).split(',')[0]}" y="${(Number(pt(len * 0.6, deg).split(',')[1]) + size * 0.065).toFixed(2)}" font-size="${fs}">${LETTER[name]}</text>`
       : '';
     return `<g class="${cls2}"><path d="${d}"/>${l}</g>`;
   }).join('');
