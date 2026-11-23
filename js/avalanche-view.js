@@ -143,7 +143,7 @@ function dayBlock(title, s, place, day, { meta = true } = {}) {
     ? `<p class="aval-sub">Problemi valanghivi</p><ul class="aval-problems">${s.problems
         .map(
           (p) =>
-            `<li>${p.aspectList?.length ? roseSvg(p.aspectList, { size: 34, label: p.aspects }) : ''}<span><b>${esc(p.label)}</b> <span class="muted">· ${esc(p.where)}${p.period ? ` · ${esc(p.period)}` : ''}</span></span></li>`,
+            `<li>${p.aspectList?.length ? roseSvg(p.aspectList, { size: 44, label: p.aspects }) : ''}<span><b>${esc(p.label)}</b> <span class="muted">· ${esc(p.where)}${p.period ? ` · ${esc(p.period)}` : ''}</span></span></li>`,
         )
         .join('')}</ul>`
     : '';
