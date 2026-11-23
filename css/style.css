@@ -225,10 +225,14 @@ main { max-width: 980px; margin: 0 auto; padding: 14px 16px 24px; outline: none;
 .sig-avviso, .sig-versanti { color: var(--win-warn); }
 .sig-info { color: var(--muted); }
 .win-rose { display: grid; justify-items: center; gap: 2px; font-size: 11px; flex: none; }
-.rose path { fill: var(--bg-2); stroke: var(--line); stroke-width: 1; }
-.rose path.loaded { fill: var(--win-warn); }
-.rose path.mine { stroke: var(--accent); stroke-width: 2.5; }
-.rose text { fill: var(--muted); font-size: 8px; }
+.rose { flex: none; }
+.rose path { fill: #fff; stroke: #0a1530; stroke-width: 1.4; stroke-linejoin: round; }
+.rose .on path { fill: #1f5c8f; }
+.win-rose .rose .on path { fill: var(--win-warn); }
+.rose .mine path { stroke: var(--accent); stroke-width: 2; }
+.rose text { fill: #0a1530; text-anchor: middle; font-weight: 700; pointer-events: none; }
+.rose .on text { fill: #fff; }
+.win-rose .rose .on text { fill: #0a1530; }
 
 .place-foot {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
@@ -296,7 +300,7 @@ table.models tr.sep th, table.models tr.sep td { border-top: 2px solid var(--lin
 .aval-rows, .aval-problems { list-style: none; margin: 0; padding: 0; }
 .aval-rows li { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; line-height: 1.25; }
 .aval-sub { margin: 10px 0 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
-.aval-problems li { margin: 0 0 4px; font-size: 14px; }
+.aval-problems li { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 14px; }
 .aval-meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 .aval-legend { list-style: none; padding: 0; margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--text); }
 .aval-legend li { display: inline-flex; align-items: center; gap: 6px; }

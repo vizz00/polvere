@@ -1,6 +1,7 @@
 // Pezzi di pagina per il pericolo valanghe (badge nella Panoramica, blocco nel dettaglio,
 // schermata Valanghe). Mostrano solo i valori ufficiali del bollettino.
 import { DANGER, SITUAZIONI_TIPO, SITUAZIONE_TIPO_URL, romeDate, isAineva, ainevaMapUrl, ainevaBulletinMapUrl } from './avalanche.js';
+import { roseSvg } from './rose.js';
 import { REGIONS } from './places.js';
 
 const esc = (s) =>
@@ -142,7 +143,7 @@ function dayBlock(title, s, place, day, { meta = true } = {}) {
     ? `<p class="aval-sub">Problemi valanghivi</p><ul class="aval-problems">${s.problems
         .map(
           (p) =>
-            `<li><b>${esc(p.label)}</b> <span class="muted">· ${esc(p.where)}${p.aspects ? ` · ${esc(p.aspects)}` : ''}${p.period ? ` · ${esc(p.period)}` : ''}</span></li>`,
+            `<li>${p.aspectList?.length ? roseSvg(p.aspectList, { size: 44, label: p.aspects }) : ''}<span><b>${esc(p.label)}</b> <span class="muted">· ${esc(p.where)}${p.period ? ` · ${esc(p.period)}` : ''}</span></span></li>`,
         )
         .join('')}</ul>`
     : '';
