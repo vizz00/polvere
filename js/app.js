@@ -3,6 +3,7 @@ import { MODELS, rangeText, roundCm, compass, totalRange } from './snow.js';
 import { loadForecast, loadDetail, loadSlr, cachedForecast, cachedBand, overviewBand } from './forecast.js';
 import { lineChart, precipStrip, scrollCharts, setChartWidth, chartHourAt } from './charts.js';
 import { powderDays } from './powder.js';
+import { powderRank } from './rank.js';
 import { loadPrefs, savePrefs } from './storage.js';
 import { mountRadar, unmountRadar } from './radar.js';
 import { renderAddPage } from './addplace.js';
@@ -462,6 +463,7 @@ function sortSwitch() {
     ['last24', 'Neve ultime 24 ore'],
     ['d1_5', 'Neve prossimi 1-5 giorni'],
     ['d6_10', 'Neve prossimi 6-10 giorni'],
+    ['powder', 'Polvere prossimi 3 giorni'],
   ];
   return `<div class="chips sortbar">
     <select class="chip sort-sel" data-sortsel aria-label="Ordina i posti">
@@ -505,14 +507,14 @@ function infoBtn(key) {
   return `<button type="button" class="info-btn" data-info="${key}" aria-pressed="${on}" aria-label="${on ? 'Nascondi la spiegazione' : 'Mostra la spiegazione'}" title="Spiegazione">ⓘ</button>`;
 }
 
-function placeHead(place, band = overviewBand(place), side = null) {
+function placeHead(place, band = overviewBand(place), side = null, extra = '') {
   const region = REGIONS[place.region];
   const fav = isFav(place.id);
   return `<header class="place-head">
     <button type="button" class="star" data-fav="${place.id}" aria-pressed="${fav}" aria-label="${fav ? 'Togli la stella' : 'Metti la stella: resta in alto'}">${fav ? '★' : '☆'}</button>
     <a class="place-title" href="#/posto/${place.id}">
       <h2>${esc(place.name)}</h2>
-      <p class="place-sub">${place.elevations[band]} m${side ? '' : ` · ${esc(region?.name || '')}`}</p>
+      <p class="place-sub">${place.elevations[band]} m${side ? '' : ` · ${esc(region?.name || '')}`}${extra}</p>
     </a>
     ${side ?? `<a class="go" href="#/posto/${place.id}" aria-label="Apri ${esc(place.name)}">›</a>`}
     <button type="button" class="x-btn" data-drop="${place.id}" aria-label="Togli ${esc(place.name)} dall'elenco" title="Togli dall'elenco">✕</button>
@@ -647,9 +649,23 @@ function forecastCard(place) {
     )
     .join('');
   return `<article class="place" data-place="${place.id}">
-    ${placeHead(place, band, snowStrip(s))}
+    ${placeHead(place, band, snowStrip(s), state.prefs.sort === 'powder' ? powderBadge(place, s) : '')}
     <div class="fc-days">${cols}</div>
   </article>`;
+}
+
+// Classifica "Polvere prossimi 3 giorni": giorno migliore e qualità della neve fresca (js/rank.js).
+function rankOf(place) {
+  const band = overviewBand(place);
+  const s = summaryOf(place, band);
+  return s ? powderRank(s, place.elevations[band]) : null;
+}
+function powderBadge(place, s) {
+  const r = powderRank(s, place.elevations[overviewBand(place)]);
+  if (!r) return '';
+  if (r.level === 'no') return '<span class="pw-line"><span class="pw-badge pw-none">Niente polvere</span></span>';
+  const when = r.date === s.days[0]?.date ? 'oggi' : r.date === s.days[1]?.date ? 'domani' : weekday(r.date).toLowerCase();
+  return `<span class="pw-line"><span class="pw-badge pw-${r.level}" title="Polvere ${esc(r.label.toLowerCase())} ${when}">${r.label} ${when}</span></span>`;
 }
 
 function renderOverview() {
@@ -662,6 +678,7 @@ function renderOverview() {
     const val = (p) => {
       const s = state.forecast.byPlace[p.id]?.[overviewBand(p)];
       if (!s) return -1;
+      if (sort === 'powder') return (rankOf(p)?.score ?? -1) * 1000 + (snowTotals(s).d1_5?.median ?? 0);
       return sort === 'last24' ? s.last24 ?? -1 : snowTotals(s)[sort]?.median ?? -1;
     };
     const byVal = (list) => [...list].sort((a, b) => val(b) - val(a));
@@ -707,6 +724,7 @@ function renderOverview() {
     <details class="explain">
       <summary>Come leggere</summary>
       <p>Accanto al nome: neve delle ultime 24 ore e totali dei prossimi 1-5 e 6-10 giorni. Per ogni giorno: massima, cielo, cm di neve, vento e, per i prossimi 3 giorni, il segno dei pericoli. I posti con la stella stanno in alto. In alto scegli l'ordine; con le frecce riordini quelli con la stella.</p>
+      <p>Polvere prossimi 3 giorni: in cima i posti con la neve fresca più bella tra oggi e dopodomani. Contano i cm caduti nel giorno e il giorno prima, ridotti se la neve è pesante, se c'è vento forte, caldo o pioggia. Solo analisi della neve: i pericoli non contano. Accanto alla quota: qualità e giorno migliore (Ottima, Buona, Discreta). A parità, conta la neve dei prossimi 5 giorni.</p>
       <p>Neve stimata: mediana tra i modelli (${MODELS.map((m) => m.label).join(', ')}). Tieni il dito su un numero per l'intervallo tra i modelli. Dall'8° giorno restano solo ECMWF e GFS.</p>
       <p>Segno dei prossimi 3 giorni: <span class="win win-chiusa legend"></span> pericolo · <span class="win win-avvisi legend"></span> attenzione · <span class="win win-aperta legend"></span> nessun pericolo, meteo buono (<span class="win win-aperta win-nobul legend"></span> senza bollettino) · <span class="win win-meteo legend"></span> nessun pericolo, meteo non buono. Un pericolo conta più del meteo.</p>
       <p>Quota di metà per tutti i posti; nella pagina del posto si sceglie valle, metà o cima. Vento: alla quota del posto, km/h e provenienza. Raffiche: vicino al suolo.</p>
