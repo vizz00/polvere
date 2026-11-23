@@ -155,9 +155,9 @@ export const dangerPatternNumber = (code) => {
 };
 
 const TENDENCY = { decreasing: 'in diminuzione', steady: 'stabile', increasing: 'in aumento' };
-const FREQUENCY = { few: 'pochi pendii', some: 'alcuni pendii', many: 'molti pendii' };
+const FREQUENCY = { nearly_none: 'pochissimi', few: 'pochi', some: 'alcuni', many: 'molti' };
 const STABILITY = { good: 'buona', fair: 'discreta', poor: 'scarsa', very_poor: 'molto scarsa' };
-const SIZE = { 1: 'piccole', 2: 'medie', 3: 'grandi', 4: 'molto grandi', 5: 'eccezionali' };
+const SIZE = { 1: 'piccole', 2: 'medie', 3: 'grandi', 4: 'molto grandi', 5: 'estreme' };
 
 const SUBDIVISION = { plus: '+', minus: '−', neutral: '=' };
 

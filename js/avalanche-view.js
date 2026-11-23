@@ -115,7 +115,7 @@ function detailsBlock(s) {
           (p) =>
             `<li><b>${esc(p.label)}</b>${[
               p.size ? `valanghe ${p.size}` : '',
-              p.frequency ? `su ${p.frequency}` : '',
+              p.frequency ? `frequenza ${p.frequency}` : '',
               p.stability ? `stabilità ${p.stability}` : '',
             ]
               .filter(Boolean)
